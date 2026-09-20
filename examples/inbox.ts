@@ -1,12 +1,12 @@
 import type {Jevascript} from '../src/jevascript';
 // The inbox department: triage, draft, edit, package.
-export default async function inbox(p:Jevascript, email:string) {
+export default async function inbox(p:Jevascript, email:string, print:(s:string)=>void) {
   let reply='';
   // Decide what deserves attention first.
   await p.feels(email,'needs a reply urgently',{confidence:.8}).when({
-    yes:()=>p.print('Priority: reply soon. The inbox has developed opinions.'),
-    maybe:()=>p.print('Priority: unclear. Check the deadline yourself.'),
-    no:()=>p.print('Priority: normal. Finish your coffee.'),
+    yes:()=>print('Priority: reply soon. The inbox has developed opinions.'),
+    maybe:()=>print('Priority: unclear. Check the deadline yourself.'),
+    no:()=>print('Priority: normal. Finish your coffee.'),
   });
   // Same input, different jobs for the LLM. (match returns a value here; the DSL cannot do that.)
   reply=await p.match(email,{
@@ -20,14 +20,14 @@ export default async function inbox(p:Jevascript, email:string) {
     reply=await p.llm('Make this brief and natural. Preserve its meaning and questions. Add no new facts or commitments.',reply);
   // A last check can admit uncertainty.
   await p.feels(reply,'polite and clear about the next step',{confidence:.8}).when({
-    yes:()=>p.print('Review: ready for you to read.'),
-    maybe:()=>p.print('Review: the editor is unsure. Give this a closer look.'),
+    yes:()=>print('Review: ready for you to read.'),
+    maybe:()=>print('Review: the editor is unsure. Give this a closer look.'),
     no:async()=>{
       reply=await p.llm('Make this polite and give it one clear next step. Preserve facts; make no commitments.',reply);
-      p.print('Review: revised once more. Check the final wording.');
+      print('Review: revised once more. Check the final wording.');
     },
   });
   // Generate a subject from the finished reply, not the first draft.
   const subject=await p.llm('Write a reply subject line, at most 7 words. No quotes, labels or commentary.',reply);
-  p.print('Subject:');p.print(subject);p.print('Draft reply:');p.print(reply);
+  print('Subject:');print(subject);print('Draft reply:');print(reply);
 }

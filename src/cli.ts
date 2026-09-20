@@ -1,20 +1,24 @@
-// bun src/cli.ts examples/urgent.ts 'input text' [--save run.json]
+// bun src/cli.ts examples/urgent.ts 'input text' [--record run.json]
 // bun src/cli.ts --replay run.json
-import {run,type Run,type Program} from './jevascript';
+import {Jevascript} from './jevascript';
+import {record,replay,type Recording} from './recording';
 import {fromEnv} from './providers';
 import {resolve} from 'node:path';
+type Saved={version:1; program:string; input:string; recording:Recording; output:string[]};
 const args=process.argv.slice(2),file=args[0];
-if(!file){console.error('Usage: bun src/cli.ts examples/x.ts [input] [--save run.json]\n       bun src/cli.ts --replay run.json');process.exit(1);}
+if(!file){console.error('Usage: bun src/cli.ts examples/x.ts [input] [--record run.json]\n       bun src/cli.ts --replay run.json');process.exit(1);}
 try {
-  let result:Run;
+  const output:string[]=[];const print=(s:string)=>{output.push(s);console.log(s);};
   if(file==='--replay') {
-    const saved=await Bun.file(args[1]).json() as Run;
-    const program=(await import(resolve(saved.program))).default as Program;
-    result=await run(program,{provider:fromEnv({}),input:saved.input,replay:saved.tape,name:saved.program});
+    const saved=await Bun.file(args[1]).json() as Saved;
+    const provider=replay(saved.recording);
+    await (await import(resolve(saved.program))).default(new Jevascript(provider),saved.input,print);
+    provider.finish();
   } else {
-    const program=(await import(resolve(file))).default as Program;
-    result=await run(program,{provider:fromEnv(),input:args[1]?.startsWith('--')?'':args[1]||'',name:file,onEvent:e=>{if(e.kind==='judge')console.error(`[judge] ${e.text}`);}});
-    const save=args.indexOf('--save');if(save!==-1){if(!args[save+1])throw new Error('Missing recording file path.');await Bun.write(args[save+1],JSON.stringify(result,null,2));}
+    const input=args[1]?.startsWith('--')?'':args[1]||'';
+    const provider=record(fromEnv());
+    await (await import(resolve(file))).default(new Jevascript(provider),input,print);
+    const save=args.indexOf('--record');
+    if(save!==-1){if(!args[save+1])throw new Error('Missing recording file path.');await Bun.write(args[save+1],JSON.stringify({version:1,program:file,input,recording:provider.recording,output} satisfies Saved,null,2));}
   }
-  for(const line of result.output)console.log(line);
 }catch(error){console.error(error instanceof Error?error.message:error);process.exitCode=1;}

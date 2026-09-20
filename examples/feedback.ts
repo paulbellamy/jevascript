@@ -1,8 +1,8 @@
 import type {Jevascript} from '../src/jevascript';
-export default async function feedback(p:Jevascript, feedback:string) {
+export default async function feedback(p:Jevascript, feedback:string, print:(s:string)=>void) {
   await p.match(feedback,{
-    'a useful suggestion':()=>p.print('Added to the roadmap. A mythical place.'),
-    'a bug report':()=>p.print('That is, regrettably, our department.'),
-    'someone having a day':()=>p.print('We hear you. We are also having a day.'),
+    'a useful suggestion':()=>print('Added to the roadmap. A mythical place.'),
+    'a bug report':()=>print('That is, regrettably, our department.'),
+    'someone having a day':()=>print('We hear you. We are also having a day.'),
   });
 }

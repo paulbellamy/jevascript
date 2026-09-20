@@ -1,9 +1,9 @@
 import type {Jevascript} from '../src/jevascript';
-export default async function startup(p:Jevascript, input:string) {
+export default async function startup(p:Jevascript, input:string, print:(s:string)=>void) {
   const pitch=await p.llm('Pitch this startup in two enthusiastic sentences.',input);
-  p.print(pitch);
+  print(pitch);
   await p.chaos(()=>p.feels(pitch,'a financially responsible business idea').when({
-    yes:()=>p.print('We are raising a seed round.'),
-    no:()=>p.print('We are raising a seed round anyway.'),
+    yes:()=>print('We are raising a seed round.'),
+    no:()=>print('We are raising a seed round anyway.'),
   }));
 }
