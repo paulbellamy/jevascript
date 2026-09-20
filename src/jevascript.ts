@@ -1,5 +1,5 @@
 // jevascript: probably-lang's primitives as a plain TypeScript library. jev + javascript.
-// feels / match / chaos / llm over one judgment call (classify). Loops, variables, budgets, output and
+// feels / match / chaos / llm over one judgment call (classify). Recording is a provider wrapper; see recording.ts.
 // recording are the host's business; see recording.ts for opt-in record/replay of model results.
 import {AsyncLocalStorage} from 'node:async_hooks';
 
