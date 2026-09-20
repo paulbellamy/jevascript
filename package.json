@@ -1,0 +1,16 @@
+{
+  "name": "jevascript",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "probably-lang's primitives (feels, match, while-feels, chaos, llm, replay) as a plain TypeScript library. jev + javascript.",
+  "scripts": {
+    "test": "bun test",
+    "check": "tsc --noEmit",
+    "run": "bun src/cli.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "latest"
+  }
+}

@@ -1,0 +1,790 @@
+[
+  {
+    "version": 1,
+    "source": "// The inbox department: triage, draft, edit, package.\nlet email = input()\nlet reply = \"\"\n\n// Decide what deserves attention first.\nif email feels \"needs a reply urgently\" with confidence 80% {\n  print(\"Priority: reply soon. The inbox has developed opinions.\")\n} otherwise maybe {\n  print(\"Priority: unclear. Check the deadline yourself.\")\n} else {\n  print(\"Priority: normal. Finish your coffee.\")\n}\n\n// Same input, different jobs for the LLM.\nmatch email {\n  \"an invitation to speak or participate in an event\" => {\n    reply = llm \"Draft a brief reply expressing interest, without accepting. Ask for missing event details. Do not invent availability, a talk title or a signature.\" using email\n  }\n  \"a routine request to schedule a meeting\" => {\n    reply = llm \"Draft a short scheduling reply. Ask for two possible times if none were offered; otherwise acknowledge the options and say availability needs checking. Do not pick a time or invent availability. No signature.\" using email\n  }\n  \"an unsolicited sales pitch\" => {\n    reply = llm \"Politely decline in one sentence. No invented excuses, no promises to reconnect, no signature.\" using email\n  }\n  \"another kind of message\" => {\n    reply = llm \"Draft a warm acknowledgement and a useful clarifying question. Do not invent answers, commitments or a signature. Keep it short.\" using email\n  }\n}\n\n// Revise until the draft sounds like a person.\nwhile reply feels \"stiff, corporate, or unnecessarily wordy\" {\n  reply = llm \"Make this brief and natural. Preserve its meaning and questions. Add no new facts or commitments.\" using reply\n}\n\n// A last check can admit uncertainty.\nif reply feels \"polite and clear about the next step\" with confidence 80% {\n  print(\"Review: ready for you to read.\")\n} otherwise maybe {\n  print(\"Review: the editor is unsure. Give this a closer look.\")\n} else {\n  reply = llm \"Make this polite and give it one clear next step. Preserve facts; make no commitments.\" using reply\n  print(\"Review: revised once more. Check the final wording.\")\n}\n\n// Generate a subject from the finished reply, not the first draft.\nlet subject = llm \"Write a reply subject line, at most 7 words. No quotes, labels or commentary.\" using reply\nprint(\"Subject:\")\nprint(subject)\nprint(\"Draft reply:\")\nprint(reply)",
+    "input": "Hi Alex, we're putting together a small developer meetup next month and would love you to give a 20-minute talk. Could you send a proposed title and let us know by tomorrow? Happy to cover travel. — Morgan",
+    "tape": [
+      {
+        "kind": "judge",
+        "args": {
+          "value": "Hi Alex, we're putting together a small developer meetup next month and would love you to give a 20-minute talk. Could you send a proposed title and let us know by tomorrow? Happy to cover travel. — Morgan",
+          "labels": [
+            "needs a reply urgently",
+            "NOT: needs a reply urgently"
+          ]
+        },
+        "result": {
+          "needs a reply urgently": 0.97,
+          "NOT: needs a reply urgently": 0.03
+        }
+      },
+      {
+        "kind": "judge",
+        "args": {
+          "value": "Hi Alex, we're putting together a small developer meetup next month and would love you to give a 20-minute talk. Could you send a proposed title and let us know by tomorrow? Happy to cover travel. — Morgan",
+          "labels": [
+            "an invitation to speak or participate in an event",
+            "a routine request to schedule a meeting",
+            "an unsolicited sales pitch",
+            "another kind of message"
+          ]
+        },
+        "result": {
+          "an invitation to speak or participate in an event": 1,
+          "a routine request to schedule a meeting": 0,
+          "an unsolicited sales pitch": 0,
+          "another kind of message": 0
+        }
+      },
+      {
+        "kind": "write",
+        "args": {
+          "prompt": "Draft a brief reply expressing interest, without accepting. Ask for missing event details. Do not invent availability, a talk title or a signature.",
+          "value": "Hi Alex, we're putting together a small developer meetup next month and would love you to give a 20-minute talk. Could you send a proposed title and let us know by tomorrow? Happy to cover travel. — Morgan"
+        },
+        "result": "\"Hi Morgan, I'd be interested in learning more about the meetup and giving a talk, but I'd like to know more about the event details before committing. Could you please share the date, location, and expected format?\""
+      },
+      {
+        "kind": "judge",
+        "args": {
+          "value": "\"Hi Morgan, I'd be interested in learning more about the meetup and giving a talk, but I'd like to know more about the event details before committing. Could you please share the date, location, and expected format?\"",
+          "labels": [
+            "stiff, corporate, or unnecessarily wordy",
+            "NOT: stiff, corporate, or unnecessarily wordy"
+          ]
+        },
+        "result": {
+          "stiff, corporate, or unnecessarily wordy": 0.06,
+          "NOT: stiff, corporate, or unnecessarily wordy": 0.94
+        }
+      },
+      {
+        "kind": "judge",
+        "args": {
+          "value": "\"Hi Morgan, I'd be interested in learning more about the meetup and giving a talk, but I'd like to know more about the event details before committing. Could you please share the date, location, and expected format?\"",
+          "labels": [
+            "polite and clear about the next step",
+            "NOT: polite and clear about the next step"
+          ]
+        },
+        "result": {
+          "polite and clear about the next step": 1,
+          "NOT: polite and clear about the next step": 0
+        }
+      },
+      {
+        "kind": "write",
+        "args": {
+          "prompt": "Write a reply subject line, at most 7 words. No quotes, labels or commentary.",
+          "value": "\"Hi Morgan, I'd be interested in learning more about the meetup and giving a talk, but I'd like to know more about the event details before committing. Could you please share the date, location, and expected format?\""
+        },
+        "result": "Request for More Information on Meetup"
+      }
+    ],
+    "output": [
+      "Priority: reply soon. The inbox has developed opinions.",
+      "Review: ready for you to read.",
+      "Subject:",
+      "Request for More Information on Meetup",
+      "Draft reply:",
+      "\"Hi Morgan, I'd be interested in learning more about the meetup and giving a talk, but I'd like to know more about the event details before committing. Could you please share the date, location, and expected format?\""
+    ],
+    "trace": [
+      {
+        "kind": "assign",
+        "line": 2,
+        "text": "email",
+        "detail": {
+          "value": "Hi Alex, we're putting together a small developer meetup next month and would love you to give a 20-minute talk. Could you send a proposed title and let us know by tomorrow? Happy to cover travel. — Morgan"
+        }
+      },
+      {
+        "kind": "assign",
+        "line": 3,
+        "text": "reply",
+        "detail": {
+          "value": ""
+        }
+      },
+      {
+        "kind": "judge",
+        "line": 6,
+        "text": "needs a reply urgently → 97% · highest probability",
+        "detail": {
+          "value": "Hi Alex, we're putting together a small developer meetup next month and would love you to give a 20-minute talk. Could you send a proposed title and let us know by tomorrow? Happy to cover travel. — Morgan",
+          "probabilities": {
+            "needs a reply urgently": 0.97,
+            "NOT: needs a reply urgently": 0.03
+          },
+          "chosen": "needs a reply urgently",
+          "threshold": 0.8
+        }
+      },
+      {
+        "kind": "print",
+        "line": 7,
+        "text": "Priority: reply soon. The inbox has developed opinions."
+      },
+      {
+        "kind": "judge",
+        "line": 15,
+        "text": "an invitation to speak or participate in an event → 100% · highest probability",
+        "detail": {
+          "value": "Hi Alex, we're putting together a small developer meetup next month and would love you to give a 20-minute talk. Could you send a proposed title and let us know by tomorrow? Happy to cover travel. — Morgan",
+          "probabilities": {
+            "an invitation to speak or participate in an event": 1,
+            "a routine request to schedule a meeting": 0,
+            "an unsolicited sales pitch": 0,
+            "another kind of message": 0
+          },
+          "chosen": "an invitation to speak or participate in an event",
+          "threshold": 0
+        }
+      },
+      {
+        "kind": "write",
+        "line": 17,
+        "text": "\"Hi Morgan, I'd be interested in learning more about the meetup and giving a talk, but I'd like to know more about the event details before committing. Could you please share the date, location, and expected format?\"",
+        "detail": {
+          "prompt": "Draft a brief reply expressing interest, without accepting. Ask for missing event details. Do not invent availability, a talk title or a signature.",
+          "value": "Hi Alex, we're putting together a small developer meetup next month and would love you to give a 20-minute talk. Could you send a proposed title and let us know by tomorrow? Happy to cover travel. — Morgan"
+        }
+      },
+      {
+        "kind": "assign",
+        "line": 17,
+        "text": "reply",
+        "detail": {
+          "value": "\"Hi Morgan, I'd be interested in learning more about the meetup and giving a talk, but I'd like to know more about the event details before committing. Could you please share the date, location, and expected format?\""
+        }
+      },
+      {
+        "kind": "judge",
+        "line": 31,
+        "text": "NOT: stiff, corporate, or unnecessarily wordy → 94% · highest probability",
+        "detail": {
+          "value": "\"Hi Morgan, I'd be interested in learning more about the meetup and giving a talk, but I'd like to know more about the event details before committing. Could you please share the date, location, and expected format?\"",
+          "probabilities": {
+            "stiff, corporate, or unnecessarily wordy": 0.06,
+            "NOT: stiff, corporate, or unnecessarily wordy": 0.94
+          },
+          "chosen": "NOT: stiff, corporate, or unnecessarily wordy",
+          "threshold": 0.5
+        }
+      },
+      {
+        "kind": "judge",
+        "line": 36,
+        "text": "polite and clear about the next step → 100% · highest probability",
+        "detail": {
+          "value": "\"Hi Morgan, I'd be interested in learning more about the meetup and giving a talk, but I'd like to know more about the event details before committing. Could you please share the date, location, and expected format?\"",
+          "probabilities": {
+            "polite and clear about the next step": 1,
+            "NOT: polite and clear about the next step": 0
+          },
+          "chosen": "polite and clear about the next step",
+          "threshold": 0.8
+        }
+      },
+      {
+        "kind": "print",
+        "line": 37,
+        "text": "Review: ready for you to read."
+      },
+      {
+        "kind": "write",
+        "line": 46,
+        "text": "Request for More Information on Meetup",
+        "detail": {
+          "prompt": "Write a reply subject line, at most 7 words. No quotes, labels or commentary.",
+          "value": "\"Hi Morgan, I'd be interested in learning more about the meetup and giving a talk, but I'd like to know more about the event details before committing. Could you please share the date, location, and expected format?\""
+        }
+      },
+      {
+        "kind": "assign",
+        "line": 46,
+        "text": "subject",
+        "detail": {
+          "value": "Request for More Information on Meetup"
+        }
+      },
+      {
+        "kind": "print",
+        "line": 47,
+        "text": "Subject:"
+      },
+      {
+        "kind": "print",
+        "line": 48,
+        "text": "Request for More Information on Meetup"
+      },
+      {
+        "kind": "print",
+        "line": 49,
+        "text": "Draft reply:"
+      },
+      {
+        "kind": "print",
+        "line": 50,
+        "text": "\"Hi Morgan, I'd be interested in learning more about the meetup and giving a talk, but I'd like to know more about the event details before committing. Could you please share the date, location, and expected format?\""
+      }
+    ],
+    "recordedAt": "2026-09-18T00:01:01.553Z",
+    "provenance": "Recorded live model results for the bundled example."
+  },
+  {
+    "version": 1,
+    "source": "// Turn a corporate announcement into human speech.\nlet draft = input()\n\n// Jev picks the description that fits best.\nmatch draft {\n  \"a corporate announcement\" => {\n    print(\"An exciting development in saying things.\")\n  }\n  \"a sales pitch\" => {\n    print(\"Someone would like our money.\")\n  }\n  \"a normal human message\" => {\n    print(\"A promising start.\")\n  }\n}\n\n// Rewrite, then ask Jev again. Stop when the jargon is gone.\nwhile draft feels \"full of corporate jargon\" {\n  draft = llm \"Rewrite plainly in one short sentence.\" using draft\n}\n\n// Uncertainty gets its own branch.\nif draft feels \"clear and specific\" with confidence 80% {\n  print(\"Approved for human consumption.\")\n} otherwise maybe {\n  print(\"Understandable? Probably. Ask a human.\")\n} else {\n  print(\"We have successfully produced different nonsense.\")\n}\n\n// Print the finished draft.\nprint(draft)",
+    "input": "We are thrilled to announce a strategic realignment of our cross-functional collaboration cadence: the weekly team meeting is moving from Monday to Tuesday.",
+    "tape": [
+      {
+        "kind": "judge",
+        "args": {
+          "value": "We are thrilled to announce a strategic realignment of our cross-functional collaboration cadence: the weekly team meeting is moving from Monday to Tuesday.",
+          "labels": [
+            "a corporate announcement",
+            "a sales pitch",
+            "a normal human message"
+          ]
+        },
+        "result": {
+          "a corporate announcement": 1,
+          "a sales pitch": 0,
+          "a normal human message": 0
+        }
+      },
+      {
+        "kind": "judge",
+        "args": {
+          "value": "We are thrilled to announce a strategic realignment of our cross-functional collaboration cadence: the weekly team meeting is moving from Monday to Tuesday.",
+          "labels": [
+            "full of corporate jargon",
+            "NOT: full of corporate jargon"
+          ]
+        },
+        "result": {
+          "full of corporate jargon": 1,
+          "NOT: full of corporate jargon": 0
+        }
+      },
+      {
+        "kind": "write",
+        "args": {
+          "prompt": "Rewrite plainly in one short sentence.",
+          "value": "We are thrilled to announce a strategic realignment of our cross-functional collaboration cadence: the weekly team meeting is moving from Monday to Tuesday."
+        },
+        "result": "Our weekly team meeting will now be held on Tuesday instead of Monday."
+      },
+      {
+        "kind": "judge",
+        "args": {
+          "value": "Our weekly team meeting will now be held on Tuesday instead of Monday.",
+          "labels": [
+            "full of corporate jargon",
+            "NOT: full of corporate jargon"
+          ]
+        },
+        "result": {
+          "full of corporate jargon": 0.07,
+          "NOT: full of corporate jargon": 0.93
+        }
+      },
+      {
+        "kind": "judge",
+        "args": {
+          "value": "Our weekly team meeting will now be held on Tuesday instead of Monday.",
+          "labels": [
+            "clear and specific",
+            "NOT: clear and specific"
+          ]
+        },
+        "result": {
+          "clear and specific": 1,
+          "NOT: clear and specific": 0
+        }
+      }
+    ],
+    "output": [
+      "An exciting development in saying things.",
+      "Approved for human consumption.",
+      "Our weekly team meeting will now be held on Tuesday instead of Monday."
+    ],
+    "trace": [
+      {
+        "kind": "assign",
+        "line": 2,
+        "text": "draft",
+        "detail": {
+          "value": "We are thrilled to announce a strategic realignment of our cross-functional collaboration cadence: the weekly team meeting is moving from Monday to Tuesday."
+        }
+      },
+      {
+        "kind": "judge",
+        "line": 5,
+        "text": "a corporate announcement → 100% · highest probability",
+        "detail": {
+          "value": "We are thrilled to announce a strategic realignment of our cross-functional collaboration cadence: the weekly team meeting is moving from Monday to Tuesday.",
+          "probabilities": {
+            "a corporate announcement": 1,
+            "a sales pitch": 0,
+            "a normal human message": 0
+          },
+          "chosen": "a corporate announcement",
+          "threshold": 0
+        }
+      },
+      {
+        "kind": "print",
+        "line": 7,
+        "text": "An exciting development in saying things."
+      },
+      {
+        "kind": "judge",
+        "line": 18,
+        "text": "full of corporate jargon → 100% · highest probability",
+        "detail": {
+          "value": "We are thrilled to announce a strategic realignment of our cross-functional collaboration cadence: the weekly team meeting is moving from Monday to Tuesday.",
+          "probabilities": {
+            "full of corporate jargon": 1,
+            "NOT: full of corporate jargon": 0
+          },
+          "chosen": "full of corporate jargon",
+          "threshold": 0.5
+        }
+      },
+      {
+        "kind": "repeat",
+        "line": 18,
+        "text": "Iteration 1 of at most 5"
+      },
+      {
+        "kind": "write",
+        "line": 19,
+        "text": "Our weekly team meeting will now be held on Tuesday instead of Monday.",
+        "detail": {
+          "prompt": "Rewrite plainly in one short sentence.",
+          "value": "We are thrilled to announce a strategic realignment of our cross-functional collaboration cadence: the weekly team meeting is moving from Monday to Tuesday."
+        }
+      },
+      {
+        "kind": "assign",
+        "line": 19,
+        "text": "draft",
+        "detail": {
+          "value": "Our weekly team meeting will now be held on Tuesday instead of Monday."
+        }
+      },
+      {
+        "kind": "judge",
+        "line": 18,
+        "text": "NOT: full of corporate jargon → 93% · highest probability",
+        "detail": {
+          "value": "Our weekly team meeting will now be held on Tuesday instead of Monday.",
+          "probabilities": {
+            "full of corporate jargon": 0.07,
+            "NOT: full of corporate jargon": 0.93
+          },
+          "chosen": "NOT: full of corporate jargon",
+          "threshold": 0.5
+        }
+      },
+      {
+        "kind": "judge",
+        "line": 23,
+        "text": "clear and specific → 100% · highest probability",
+        "detail": {
+          "value": "Our weekly team meeting will now be held on Tuesday instead of Monday.",
+          "probabilities": {
+            "clear and specific": 1,
+            "NOT: clear and specific": 0
+          },
+          "chosen": "clear and specific",
+          "threshold": 0.8
+        }
+      },
+      {
+        "kind": "print",
+        "line": 24,
+        "text": "Approved for human consumption."
+      },
+      {
+        "kind": "print",
+        "line": 32,
+        "text": "Our weekly team meeting will now be held on Tuesday instead of Monday."
+      }
+    ],
+    "recordedAt": "2026-09-18T00:01:03.791Z",
+    "provenance": "Recorded live model results for the bundled example."
+  },
+  {
+    "version": 1,
+    "source": "let message = input()\n\nif message feels \"genuinely urgent\" with confidence 80% {\n  print(\"Okay. This is a drop-everything situation.\")\n} otherwise maybe {\n  print(\"Define urgent. And define tiny favor.\")\n} else {\n  print(\"This could have been an email. Oh, it is.\")\n}",
+    "input": "Hey, tiny favor — the presentation is in 10 minutes and every slide says INSERT STRATEGY HERE.",
+    "tape": [
+      {
+        "kind": "judge",
+        "args": {
+          "value": "Hey, tiny favor — the presentation is in 10 minutes and every slide says INSERT STRATEGY HERE.",
+          "labels": [
+            "genuinely urgent",
+            "NOT: genuinely urgent"
+          ]
+        },
+        "result": {
+          "genuinely urgent": 0.87,
+          "NOT: genuinely urgent": 0.13
+        }
+      }
+    ],
+    "output": [
+      "Okay. This is a drop-everything situation."
+    ],
+    "trace": [
+      {
+        "kind": "assign",
+        "line": 1,
+        "text": "message",
+        "detail": {
+          "value": "Hey, tiny favor — the presentation is in 10 minutes and every slide says INSERT STRATEGY HERE."
+        }
+      },
+      {
+        "kind": "judge",
+        "line": 3,
+        "text": "genuinely urgent → 87% · highest probability",
+        "detail": {
+          "value": "Hey, tiny favor — the presentation is in 10 minutes and every slide says INSERT STRATEGY HERE.",
+          "probabilities": {
+            "genuinely urgent": 0.87,
+            "NOT: genuinely urgent": 0.13
+          },
+          "chosen": "genuinely urgent",
+          "threshold": 0.8
+        }
+      },
+      {
+        "kind": "print",
+        "line": 4,
+        "text": "Okay. This is a drop-everything situation."
+      }
+    ],
+    "recordedAt": "2026-09-18T00:01:03.967Z",
+    "provenance": "Recorded live model results for the bundled example."
+  },
+  {
+    "version": 1,
+    "source": "let draft = input()\n\nwhile draft feels \"like a LinkedIn influencer post\" {\n  draft = llm \"Rewrite this as a normal person. Remove corporate language, humblebrags and life lessons. One short sentence.\" using draft\n}\n\nprint(\"We have achieved human speech. Probably.\")\nprint(draft)",
+    "input": "I am humbled and thrilled to announce that I have disrupted my morning routine by drinking water. Here are 10 leadership lessons.",
+    "tape": [
+      {
+        "kind": "judge",
+        "args": {
+          "value": "I am humbled and thrilled to announce that I have disrupted my morning routine by drinking water. Here are 10 leadership lessons.",
+          "labels": [
+            "like a LinkedIn influencer post",
+            "NOT: like a LinkedIn influencer post"
+          ]
+        },
+        "result": {
+          "like a LinkedIn influencer post": 0.99,
+          "NOT: like a LinkedIn influencer post": 0.01
+        }
+      },
+      {
+        "kind": "write",
+        "args": {
+          "prompt": "Rewrite this as a normal person. Remove corporate language, humblebrags and life lessons. One short sentence.",
+          "value": "I am humbled and thrilled to announce that I have disrupted my morning routine by drinking water. Here are 10 leadership lessons."
+        },
+        "result": "\"I drank water this morning.\""
+      },
+      {
+        "kind": "judge",
+        "args": {
+          "value": "\"I drank water this morning.\"",
+          "labels": [
+            "like a LinkedIn influencer post",
+            "NOT: like a LinkedIn influencer post"
+          ]
+        },
+        "result": {
+          "like a LinkedIn influencer post": 0.01,
+          "NOT: like a LinkedIn influencer post": 0.99
+        }
+      }
+    ],
+    "output": [
+      "We have achieved human speech. Probably.",
+      "\"I drank water this morning.\""
+    ],
+    "trace": [
+      {
+        "kind": "assign",
+        "line": 1,
+        "text": "draft",
+        "detail": {
+          "value": "I am humbled and thrilled to announce that I have disrupted my morning routine by drinking water. Here are 10 leadership lessons."
+        }
+      },
+      {
+        "kind": "judge",
+        "line": 3,
+        "text": "like a LinkedIn influencer post → 99% · highest probability",
+        "detail": {
+          "value": "I am humbled and thrilled to announce that I have disrupted my morning routine by drinking water. Here are 10 leadership lessons.",
+          "probabilities": {
+            "like a LinkedIn influencer post": 0.99,
+            "NOT: like a LinkedIn influencer post": 0.01
+          },
+          "chosen": "like a LinkedIn influencer post",
+          "threshold": 0.5
+        }
+      },
+      {
+        "kind": "repeat",
+        "line": 3,
+        "text": "Iteration 1 of at most 5"
+      },
+      {
+        "kind": "write",
+        "line": 4,
+        "text": "\"I drank water this morning.\"",
+        "detail": {
+          "prompt": "Rewrite this as a normal person. Remove corporate language, humblebrags and life lessons. One short sentence.",
+          "value": "I am humbled and thrilled to announce that I have disrupted my morning routine by drinking water. Here are 10 leadership lessons."
+        }
+      },
+      {
+        "kind": "assign",
+        "line": 4,
+        "text": "draft",
+        "detail": {
+          "value": "\"I drank water this morning.\""
+        }
+      },
+      {
+        "kind": "judge",
+        "line": 3,
+        "text": "NOT: like a LinkedIn influencer post → 99% · highest probability",
+        "detail": {
+          "value": "\"I drank water this morning.\"",
+          "probabilities": {
+            "like a LinkedIn influencer post": 0.01,
+            "NOT: like a LinkedIn influencer post": 0.99
+          },
+          "chosen": "NOT: like a LinkedIn influencer post",
+          "threshold": 0.5
+        }
+      },
+      {
+        "kind": "print",
+        "line": 7,
+        "text": "We have achieved human speech. Probably."
+      },
+      {
+        "kind": "print",
+        "line": 8,
+        "text": "\"I drank water this morning.\""
+      }
+    ],
+    "recordedAt": "2026-09-18T00:01:06.918Z",
+    "provenance": "Recorded live model results for the bundled example."
+  },
+  {
+    "version": 1,
+    "source": "let feedback = input()\n\nmatch feedback {\n  \"a useful suggestion\" => {\n    print(\"Added to the roadmap. A mythical place.\")\n  }\n  \"a bug report\" => {\n    print(\"That is, regrettably, our department.\")\n  }\n  \"someone having a day\" => {\n    print(\"We hear you. We are also having a day.\")\n  }\n}",
+    "input": "Your app deleted my work, but the button animation was honestly beautiful.",
+    "tape": [
+      {
+        "kind": "judge",
+        "args": {
+          "value": "Your app deleted my work, but the button animation was honestly beautiful.",
+          "labels": [
+            "a useful suggestion",
+            "a bug report",
+            "someone having a day"
+          ]
+        },
+        "result": {
+          "a useful suggestion": 0,
+          "a bug report": 0.6,
+          "someone having a day": 0.4
+        }
+      }
+    ],
+    "output": [
+      "That is, regrettably, our department."
+    ],
+    "trace": [
+      {
+        "kind": "assign",
+        "line": 1,
+        "text": "feedback",
+        "detail": {
+          "value": "Your app deleted my work, but the button animation was honestly beautiful."
+        }
+      },
+      {
+        "kind": "judge",
+        "line": 3,
+        "text": "a bug report → 60% · highest probability",
+        "detail": {
+          "value": "Your app deleted my work, but the button animation was honestly beautiful.",
+          "probabilities": {
+            "a useful suggestion": 0,
+            "a bug report": 0.6,
+            "someone having a day": 0.4
+          },
+          "chosen": "a bug report",
+          "threshold": 0
+        }
+      },
+      {
+        "kind": "print",
+        "line": 8,
+        "text": "That is, regrettably, our department."
+      }
+    ],
+    "recordedAt": "2026-09-18T00:01:07.113Z",
+    "provenance": "Recorded live model results for the bundled example."
+  },
+  {
+    "version": 1,
+    "source": "let pitch = llm \"Pitch this startup in two enthusiastic sentences.\" using input()\nprint(pitch)\n\nchaos {\n  if pitch feels \"a financially responsible business idea\" {\n    print(\"We are raising a seed round.\")\n  } else {\n    print(\"We are raising a seed round anyway.\")\n  }\n}",
+    "input": "A subscription service that sends you reminders to cancel your other subscriptions.",
+    "tape": [
+      {
+        "kind": "write",
+        "args": {
+          "prompt": "Pitch this startup in two enthusiastic sentences.",
+          "value": "A subscription service that sends you reminders to cancel your other subscriptions."
+        },
+        "result": "Introducing SubscriptionStop - the revolutionary new service that's about to change the way you manage your monthly bills forever! With SubscriptionStop, we're providing a proactive reminder system that alerts you to cancel unwanted subscriptions, freeing you from unwanted charges and unnecessary clutter in your wallet, making it easier to live your financial best life."
+      },
+      {
+        "kind": "judge",
+        "args": {
+          "value": "Introducing SubscriptionStop - the revolutionary new service that's about to change the way you manage your monthly bills forever! With SubscriptionStop, we're providing a proactive reminder system that alerts you to cancel unwanted subscriptions, freeing you from unwanted charges and unnecessary clutter in your wallet, making it easier to live your financial best life.",
+          "labels": [
+            "a financially responsible business idea",
+            "NOT: a financially responsible business idea"
+          ]
+        },
+        "result": {
+          "a financially responsible business idea": 0.87,
+          "NOT: a financially responsible business idea": 0.13
+        },
+        "draw": 0.08221594525649045
+      }
+    ],
+    "output": [
+      "Introducing SubscriptionStop - the revolutionary new service that's about to change the way you manage your monthly bills forever! With SubscriptionStop, we're providing a proactive reminder system that alerts you to cancel unwanted subscriptions, freeing you from unwanted charges and unnecessary clutter in your wallet, making it easier to live your financial best life.",
+      "We are raising a seed round."
+    ],
+    "trace": [
+      {
+        "kind": "write",
+        "line": 1,
+        "text": "Introducing SubscriptionStop - the revolutionary new service that's about to change the way you manage your monthly bills forever! With SubscriptionStop, we're providing a proactive reminder system that alerts you to cancel unwanted subscriptions, freeing you from unwanted charges and unnecessary clutter in your wallet, making it easier to live your financial best life.",
+        "detail": {
+          "prompt": "Pitch this startup in two enthusiastic sentences.",
+          "value": "A subscription service that sends you reminders to cancel your other subscriptions."
+        }
+      },
+      {
+        "kind": "assign",
+        "line": 1,
+        "text": "pitch",
+        "detail": {
+          "value": "Introducing SubscriptionStop - the revolutionary new service that's about to change the way you manage your monthly bills forever! With SubscriptionStop, we're providing a proactive reminder system that alerts you to cancel unwanted subscriptions, freeing you from unwanted charges and unnecessary clutter in your wallet, making it easier to live your financial best life."
+        }
+      },
+      {
+        "kind": "print",
+        "line": 2,
+        "text": "Introducing SubscriptionStop - the revolutionary new service that's about to change the way you manage your monthly bills forever! With SubscriptionStop, we're providing a proactive reminder system that alerts you to cancel unwanted subscriptions, freeing you from unwanted charges and unnecessary clutter in your wallet, making it easier to live your financial best life."
+      },
+      {
+        "kind": "judge",
+        "line": 5,
+        "text": "a financially responsible business idea → 87% · sampled",
+        "detail": {
+          "value": "Introducing SubscriptionStop - the revolutionary new service that's about to change the way you manage your monthly bills forever! With SubscriptionStop, we're providing a proactive reminder system that alerts you to cancel unwanted subscriptions, freeing you from unwanted charges and unnecessary clutter in your wallet, making it easier to live your financial best life.",
+          "probabilities": {
+            "a financially responsible business idea": 0.87,
+            "NOT: a financially responsible business idea": 0.13
+          },
+          "chosen": "a financially responsible business idea",
+          "threshold": 0.5,
+          "draw": 0.08221594525649045
+        }
+      },
+      {
+        "kind": "print",
+        "line": 6,
+        "text": "We are raising a seed round."
+      }
+    ],
+    "recordedAt": "2026-09-18T00:01:10.688Z",
+    "provenance": "Recorded live model results for the bundled example."
+  },
+  {
+    "version": 1,
+    "source": "// This one runs without any model calls.\nlet greeting = \"Hello, uncertainty.\"\nprint(greeting)\n\nrepeat 3 {\n  print(\"Everything is going according to some plan.\")\n}",
+    "input": "",
+    "tape": [],
+    "output": [
+      "Hello, uncertainty.",
+      "Everything is going according to some plan.",
+      "Everything is going according to some plan.",
+      "Everything is going according to some plan."
+    ],
+    "trace": [
+      {
+        "kind": "assign",
+        "line": 2,
+        "text": "greeting",
+        "detail": {
+          "value": "Hello, uncertainty."
+        }
+      },
+      {
+        "kind": "print",
+        "line": 3,
+        "text": "Hello, uncertainty."
+      },
+      {
+        "kind": "repeat",
+        "line": 5,
+        "text": "Iteration 1 of 3"
+      },
+      {
+        "kind": "print",
+        "line": 6,
+        "text": "Everything is going according to some plan."
+      },
+      {
+        "kind": "repeat",
+        "line": 5,
+        "text": "Iteration 2 of 3"
+      },
+      {
+        "kind": "print",
+        "line": 6,
+        "text": "Everything is going according to some plan."
+      },
+      {
+        "kind": "repeat",
+        "line": 5,
+        "text": "Iteration 3 of 3"
+      },
+      {
+        "kind": "print",
+        "line": 6,
+        "text": "Everything is going according to some plan."
+      }
+    ],
+    "recordedAt": "2026-09-18T00:01:10.740Z",
+    "provenance": "Recorded live model results for the bundled example."
+  }
+]
