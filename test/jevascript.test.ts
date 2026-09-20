@@ -23,14 +23,14 @@ test('generation receives only explicitly supplied context',async()=>{
   const r=await run(async(j,input)=>{const secret='not passed';j.print(await j.llm('rewrite',input));void secret;},{provider:p,input:'hello'});
   expect(r.output).toEqual(['hi']);expect(r.tape[0].args).toEqual({prompt:'rewrite',value:'hello'});
 });
-test('whileFeels reevaluates the updated value and exits',async()=>{
+test('a plain while loop over feels reevaluates the updated value and exits',async()=>{
   const seen:unknown[]=[];
   const p:Provider={write:async()=>'normal',judge:async(value,labels)=>{seen.push(value);return {[labels[0]]:value==='corporate'?.99:.01,[labels[1]]:value==='corporate'?.01:.99};}};
-  const r=await run(async(j,input)=>{let draft=input;for await(const _ of j.whileFeels(()=>draft,'corporate'))draft=await j.llm('fix',draft);j.print(draft);},{provider:p,input:'corporate'});
+  const r=await run(async(j,input)=>{let draft=input;while((await j.feels(draft,'corporate')).yes)draft=await j.llm('fix',draft);j.print(draft);},{provider:p,input:'corporate'});
   expect(seen).toEqual(['corporate','normal']);expect(r.output).toEqual(['normal']);
 });
-test('runaway semantic loops stop explicitly',async()=>{
-  await expect(run(async j=>{for await(const _ of j.whileFeels(()=>'yes','true'))j.print('again');},{provider:judge(.99)})).rejects.toThrow('after 5 iterations');
+test('runaway semantic loops hit the call budget',async()=>{
+  await expect(run(async j=>{while((await j.feels('yes','true')).yes)j.print('again');},{provider:judge(.99)})).rejects.toThrow('12 model-call limit');
 });
 test('chaos samples probabilities; replay preserves sample and generated text',async()=>{
   const p={...judge(.9),write:async()=>'Generated once'};

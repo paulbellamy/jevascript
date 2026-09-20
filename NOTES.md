@@ -15,18 +15,22 @@ the same code paths. 18 more unit tests are ports of probably's own.
 
 - `feels` = judge over `[q, "NOT: q"]`, gate on the winner's probability, tri-state result.
 - `match` = judge over labels, argmax, first-label ties, no maybe branch (threshold 0).
-- `while feels` = judge before each body, default 50% gate, break on no OR uncertain, throw after 5.
+- `while feels` = `while ((await p.feels(v,q)).yes)`. break on no OR uncertain, same as the dsl. no 5-iteration
+  cap: the 12-call budget bounds a runaway loop anyway. (a `whileFeels` async iterator existed in the first cut,
+  purely for the cap and the `Iteration n of 5` trace events; removed. control flow is the host's job, that's
+  the whole thesis.)
 - `chaos` = same "gate first, then sample with the draw" order. scope is an `AsyncLocalStorage`, so it
   behaves like the lexical block even across awaits and nested calls.
 - `llm` = same `{prompt, value}` args; the model sees only what you pass.
-- budgets: 12 effects, 5 loop iterations, 90 s, 25 s per call (provider side), 6 k input, 12 k output.
+- budgets: 12 effects, 90 s, 25 s per call (provider side), 6 k input, 12 k output.
 - provider interface is byte-compatible; probably's `providers.ts` drops in.
-- `Run` shape is the same minus `source` (we store the program name) and line numbers in the trace.
+- `Run` shape is the same minus `source` (we store the program name), line numbers and loop-iteration events
+  in the trace. the fidelity test compares output, tape and judge trace.
 
 ## where the library is better
 
 - `match` returns a value. the dsl has to assign inside branches.
-- `whileFeels` is an async iterator; the body is ordinary code.
+- loops are host loops; the body is ordinary code.
 - `feels` is a value (`verdict`, `probability`, `probabilities`) not just a branch. you can log it, gate on
   `p.probability > .95` yourself, or aggregate several judgments in code (which is what the jev-vim
   experiment found jev is actually good at: local yes/no, code does the counting).
@@ -39,8 +43,7 @@ the same code paths. 18 more unit tests are ports of probably's own.
 
 - **the syntax.** `if x feels "…" with confidence 80% { } otherwise maybe { }` reads like prose;
   `.when({yes, maybe, no})` reads like code. this is the whole aesthetic of the thing and it is not
-  recoverable without a parser or a babel plugin. the `for await … of p.whileFeels(...)` form is the
-  closest we get and it is honestly fine.
+  recoverable without a parser or a babel plugin. `while ((await p.feels(v, q)).yes)` is honestly fine.
 - **the sandbox.** probably's parser rejects `print(process.env)` and `fetch(...)` before execution; the
   hosted worker never executes user programs at all. a ts program is arbitrary code. if you want
   untrusted programs, you want the language (or a vm boundary), not this.

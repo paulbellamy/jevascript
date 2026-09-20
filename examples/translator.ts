@@ -9,7 +9,7 @@ export default async function translator(p:Jevascript, input:string) {
     'a normal human message':()=>p.print('A promising start.'),
   });
   // Rewrite, then ask Jev again. Stop when the jargon is gone.
-  for await (const _ of p.whileFeels(()=>draft,'full of corporate jargon'))
+  while((await p.feels(draft,'full of corporate jargon')).yes)
     draft=await p.llm('Rewrite plainly in one short sentence.',draft);
   // Uncertainty gets its own branch.
   await p.feels(draft,'clear and specific',{confidence:.8}).when({

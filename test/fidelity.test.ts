@@ -20,8 +20,8 @@ for(const rec of recordings as Recording[]) {
     const r=await run(program,{provider:absent,input:rec.input,replay:rec.tape,name});
     expect(r.output).toEqual(rec.output);
     expect(r.tape).toEqual(rec.tape);
-    // Decision trace matches too (probably's trace carries line numbers; ours doesn't).
-    const decisions=(t:{kind:string;text:string}[])=>t.filter(t=>t.kind==='judge'||t.kind==='repeat').map(t=>t.text);
+    // Judge trace matches too (probably's trace carries line numbers and loop-iteration events; ours doesn't).
+    const decisions=(t:{kind:string;text:string}[])=>t.filter(t=>t.kind==='judge').map(t=>t.text);
     expect(decisions(r.trace)).toEqual(decisions(rec.trace));
   });
 }

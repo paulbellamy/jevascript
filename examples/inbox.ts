@@ -16,7 +16,7 @@ export default async function inbox(p:Jevascript, email:string) {
     'another kind of message':()=>p.llm('Draft a warm acknowledgement and a useful clarifying question. Do not invent answers, commitments or a signature. Keep it short.',email),
   });
   // Revise until the draft sounds like a person.
-  for await (const _ of p.whileFeels(()=>reply,'stiff, corporate, or unnecessarily wordy'))
+  while((await p.feels(reply,'stiff, corporate, or unnecessarily wordy')).yes)
     reply=await p.llm('Make this brief and natural. Preserve its meaning and questions. Add no new facts or commitments.',reply);
   // A last check can admit uncertainty.
   await p.feels(reply,'polite and clear about the next step',{confidence:.8}).when({

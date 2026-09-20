@@ -1,7 +1,7 @@
 # jevascript
 
-probably-lang's primitives (`feels`, `match`, `while … feels`, `chaos`, `llm`, replay) as a plain
-TypeScript library. jev + javascript. 158 lines of runtime, no deps.
+probably-lang's primitives (`feels`, `match`, `chaos`, `llm`, replay) as a plain TypeScript library.
+jev + javascript. 141 lines of runtime, no deps. loops are just loops.
 
 the question this experiment answers: how close can a library get to
 [probably](https://probably-lang.southpolesteve.workers.dev/) without a parser?
@@ -30,8 +30,8 @@ await run(async (p, email) => {
     'another kind of message': () => p.llm('Draft a warm acknowledgement…', email),
   });
 
-  // while reply feels "…" { }   (re-judged each iteration, throws after 5)
-  for await (const _ of p.whileFeels(() => reply, 'stiff, corporate, or unnecessarily wordy'))
+  // while reply feels "…" { }   (a while loop; the 12-call budget bounds it)
+  while ((await p.feels(reply, 'stiff, corporate, or unnecessarily wordy')).yes)
     reply = await p.llm('Make this brief and natural.', reply);
 
   // chaos { }   sample from the distribution instead of argmax; scope follows async control flow
@@ -46,16 +46,20 @@ await run(async (p, email) => {
 | `if v feels "q" with confidence 80% {a} otherwise maybe {b} else {c}` | `await p.feels(v,'q',{confidence:.8}).when({yes:a, maybe:b, no:c})` |
 | `if v feels "q" {a}` | `if ((await p.feels(v,'q')).yes) a()` |
 | `match v { "l1" => {a} "l2" => {b} }` | `await p.match(v, {l1:a, l2:b})` |
-| `while v feels "q" { body }` | `for await (const _ of p.whileFeels(()=>v,'q')) body` |
+| `while v feels "q" { body }` | `while ((await p.feels(v,'q')).yes) body` |
 | `llm "instruction" using v` | `await p.llm('instruction', v)` |
 | `chaos { … }` | `await p.chaos(async () => { … })` |
-| `repeat 3 { … }` | a for loop (`p.repeat` exists for trace parity) |
+| `repeat 3 { … }` | a for loop |
 | `print(v)` | `p.print(v)` (collected into `run().output`) |
 | `let` / `=` / `input()` | javascript |
-| 12 calls, 5 loop iterations, 90 s | same defaults; `maxCalls`, `maxLoop`, `timeoutMs` |
+| 12 calls, 5 loop iterations, 90 s | 12 calls and 90 s (`maxCalls`, `timeoutMs`); no loop cap, the call budget bounds loops |
 | replay tape | same `Effect[]` shape, and order-independent (survives `Promise.all`) |
 
 lower level: `p.classify(value, labels, confidence)` is the one judgment call everything else is sugar over.
+
+`feels` resolves to a `Feeling`: `verdict` is `'yes' | 'maybe' | 'no'` (tri-state because of the confidence
+gate), `.yes/.no/.maybe` are booleans, `probability` is p(yes). at the default 50% gate `maybe` cannot happen,
+so `.yes` is a plain boolean there.
 
 ## run
 

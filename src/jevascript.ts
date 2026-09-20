@@ -1,5 +1,5 @@
 // jevascript: probably-lang's primitives as a plain TypeScript library.
-// feels / match / whileFeels / chaos / llm, with the same budgets, effect tape and replay
+// feels / match / chaos / llm, with the same budgets, effect tape and replay
 // as the reference interpreter (probably 0.1). Provider interface is byte-compatible, so
 // probably's own recordings replay through this runtime unchanged (see test/fidelity.test.ts).
 import {AsyncLocalStorage} from 'node:async_hooks';
@@ -10,7 +10,7 @@ export interface Provider {
   judge(value:Value, labels:string[], signal:AbortSignal):Promise<Record<string,number>>;
 }
 export type Effect = {kind:'write'|'judge'; args:unknown; result:unknown; draw?:number};
-export type Trace = {kind:'write'|'judge'|'print'|'repeat'; text:string; detail?:unknown};
+export type Trace = {kind:'write'|'judge'|'print'; text:string; detail?:unknown};
 export type Run = {version:1; program:string; input:string; tape:Effect[]; output:string[]; trace:Trace[]};
 export type Verdict = 'yes'|'maybe'|'no';
 export type Options = {
@@ -20,7 +20,6 @@ export type Options = {
   onEvent?:(event:Trace)=>void;
   random?:()=>number;          // chaos draws; injectable for tests
   maxCalls?:number;            // default 12, like probably
-  maxLoop?:number;             // default 5, like probably
   timeoutMs?:number;           // default 90_000, like probably
 };
 
@@ -109,18 +108,6 @@ export class Jevascript {
     return (await handlers[label!]()) as Awaited<ReturnType<H[keyof H]>>;
   }
 
-  /** `while value feels "question" { ... }` as an async iterator. Re-judges the getter's current value before each
-   *  iteration; throws if still true after `max` bodies (default 5), like probably. */
-  async *whileFeels(value:()=>Value, question:string, {confidence=.5,max=this.o.maxLoop??5}:{confidence?:number; max?:number}={}):AsyncGenerator<number> {
-    let i=0;
-    while(true) {
-      const f=await this.feels(value(),question,{confidence});
-      if(!f.yes)return;
-      if(i===max)throw new JevascriptError(`Loop still feels true after ${max} iterations. Try a different rewrite instruction.`);
-      this.emit({kind:'repeat',text:`Iteration ${++i} of at most ${max}`});
-      yield i;
-    }
-  }
 
   /** `llm "instruction" using context`. The model sees only what you pass. */
   async llm(prompt:string, context?:Value):Promise<string> {
@@ -134,10 +121,6 @@ export class Jevascript {
    *  (after the confidence gate, like probably). Scope follows async control flow, so nested awaits count. */
   chaos<R>(body:()=>Promise<R>|R):Promise<R>{return this.chaosScope.run(true,async()=>body());}
 
-  /** `repeat n { ... }`. Just a loop, kept for trace parity. */
-  async repeat(count:number, body:(i:number)=>unknown):Promise<void> {
-    for(let i=0;i<count;i++){this.emit({kind:'repeat',text:`Iteration ${i+1} of ${count}`});await body(i);}
-  }
 
   print(value:Value):void{const text=String(value);this.output.push(text);this.emit({kind:'print',text});}
 
