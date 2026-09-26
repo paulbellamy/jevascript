@@ -3,7 +3,7 @@
 probably-lang's primitives (`feels`, `match`, `chaos`, `llm`) as a plain TypeScript library.
 jev + javascript. 85 lines of runtime, no deps.
 
-how close can a library get to [probably](https://probably-lang.southpolesteve.workers.dev/) without a
+how close can a library get to [probably](https://github.com/southpolesteve/probably) ([playground](https://probably-lang.southpolesteve.workers.dev/)) without a
 parser? all the way, on the semantics: probably's own shipped recordings (real jev + llama results for
 its seven examples) replay through the ts ports with identical output, and re-recording the replay
 reproduces probably's recording exactly (`test/fidelity.test.ts`). what you don't get is the prose-like
@@ -107,3 +107,8 @@ examples/*.prob      probably originals, unchanged
 examples/*.ts        ports, side by side
 test/                runtime, recording, fidelity (test/fixtures/recordings.json is probably's, verbatim)
 ```
+
+## license
+
+MIT, see `LICENSE`. the probably examples, recordings and ported bits are probably's (MIT, Steve Faulkner);
+see `THIRD_PARTY_NOTICES.md`.

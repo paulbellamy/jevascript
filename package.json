@@ -3,7 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "probably-lang's primitives (feels, match, while-feels, chaos, llm, replay) as a plain TypeScript library. jev + javascript.",
+  "description": "probably-lang's primitives (feels, match, chaos, llm) as a plain TypeScript library. jev + javascript.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paulbellamy/jevascript.git"
+  },
   "scripts": {
     "test": "bun test",
     "check": "tsc --noEmit",
