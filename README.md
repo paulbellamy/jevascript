@@ -67,8 +67,8 @@ interface Provider {
 }
 ```
 
-`src/providers.ts` has a jev judge (`JEV_API_KEY` or `TYPESAFE_API_KEY`, `JEV_MODEL`, `JEV_URL`; pin a model,
-aliases rot) and a writer for any
+`src/providers.ts` has a jev judge (configured like the TypeSafe SDKs: `TYPESAFE_API_KEY`, `TYPESAFE_BASE_URL`,
+`TYPESAFE_DEFAULT_MODEL`, and retrying 408/429/5xx like them; pin a model, aliases rot) and a writer for any
 openai-compatible chat endpoint (`TEXT_API_KEY`, `TEXT_BASE_URL`, `TEXT_MODEL`). both send probably's exact
 prompts, so judgments are comparable.
 
@@ -97,7 +97,7 @@ back as exit codes and plain lines.
 
 ```sh
 bun install -g github:paulbellamy/jevascript    # or bun run build: dist/jev, one standalone binary
-export JEV_API_KEY=… JEV_MODEL=jev-1.13.0
+export TYPESAFE_API_KEY=… TYPESAFE_DEFAULT_MODEL=jev-1.13.0    # and TYPESAFE_BASE_URL for another server
 ```
 
 ```sh
@@ -107,8 +107,8 @@ esac
 case $(jev match bug='a bug report' idea='a useful suggestion' <<<"$feedback") in bug) … ;; idea) … ;; esac
 while jev feels -q 'full of corporate jargon' <<<"$draft"; do draft=$(rewrite <<<"$draft"); done
 
-jev grep -n 'something an on-call engineer should act on' < app.log     # a question per line, 50 per call
-eval "$(jev ask 'urgent? needs a reply urgently' 'kind: invite=an invitation | other=anything else' <<<"$email")"
+jev grep -n 'something an on-call engineer should act on' < app.log     # a yes/no per line, batched
+eval "$(jev ask 'urgent? Does this need a reply today?' 'kind: invite=an invitation | other' <<<"$email")"
 jev feels urgent --dry-run <<<"$msg" | jev raw                          # print the request, then send it
 jev run examples/urgent.ts 'The demo starts in two minutes.'            # a jevascript program
 ```
@@ -122,10 +122,13 @@ jev run examples/urgent.ts 'The demo starts in two minutes.'            # a jeva
 
 errors are never 1, so a `case` can't mistake one for "no"; `if` folds 2 and 3 into false, like grep.
 
-`feels`, `match` and `run` go through the library's `Provider`, so they send probably's exact request. `grep`, `ask`
-and `raw` talk to systemone directly, because one call can carry many questions: `grep` puts the lines in the state
-and asks a question per line, `ask` asks all its questions about one state (`-f key=value`, `key=@file` and
-`key:=json` build a structured one). there is no text generation command; pair jev with any llm cli.
+`feels`, `match` and `run` go through the library's `Provider`, so they send probably's exact request (a choice
+between a description and its negation). `grep`, `ask` and `raw` talk to [systemone](https://docs.typesafe.ai/api)
+directly, because one call carries many native questions: `grep` puts the lines in the state as an array and asks a
+Noul per line that points at it (`` `lines[3]` ``), packing lines into calls by jev's context budget (64k tokens a
+call, 32k for the state plus the longest question; there is no limit on the number of questions), or `--batch N` a
+call; `ask` asks Nouls (`name? question`) and Choices (`name: question? a | key=b`) about one state (`-f key=value`,
+`key=@file` and `key:=json` build a structured one). there is no text generation command; pair jev with any llm cli.
 
 chaos is `--chaos` or `JEV_CHAOS=1`, and the flag wins (`--no-chaos` opts out). the env var is the shell's version
 of the runtime's async scope: `JEV_CHAOS=1 some_function` makes every call inside it sample.
@@ -145,10 +148,10 @@ matches the version.
 ## run
 
 ```sh
-bun install && bun test        # 39 tests; 10 replay probably's recordings (7 ts ports, 3 shell ports); zero model calls
+bun install && bun test        # 42 tests; 10 replay probably's recordings (7 ts ports, 3 shell ports); zero model calls
 bun run check                  # tsc
 bun install -g .               # jev on PATH
-JEV_API_KEY=… TEXT_API_KEY=… TEXT_BASE_URL=https://gateway.ai.cloudflare.com/v1/<acct>/<gw>/workers-ai/v1 \
+TYPESAFE_API_KEY=… TEXT_API_KEY=… TEXT_BASE_URL=https://gateway.ai.cloudflare.com/v1/<acct>/<gw>/workers-ai/v1 \
   jev record inbox.run.jsonl -- jev run examples/inbox.ts "$(cat email.txt)"
 jev replay inbox.run.jsonl -- jev run examples/inbox.ts "$(cat email.txt)"
 ```
@@ -158,7 +161,7 @@ jev replay inbox.run.jsonl -- jev run examples/inbox.ts "$(cat email.txt)"
 ```
 src/jevascript.ts    Jevascript (classify, feels, match, chaos, llm), Feeling, decide(), distribution()
 src/recording.ts     record(provider) / replay(recording, claim)
-src/providers.ts     jev judge and systemone requests, chat-completions writer, fromEnv()
+src/providers.ts     jev judge, systemone client, chat-completions writer, fromEnv()
 src/jev.ts           the cli
 skills/jev/SKILL.md  the agent skill `jev --skill` prints
 examples/*.prob      probably originals, unchanged

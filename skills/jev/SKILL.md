@@ -1,6 +1,6 @@
 ---
 name: jev
-description: "Judge text from the shell with the `jev` CLI: yes/no questions, picking one of several labels, filtering lines, or answering several questions about one input, backed by jev (typesafe.ai's system-one judge). Use when a script or task needs a fuzzy decision about text (is this email urgent, is this a bug report or a feature request, which log lines matter) that string matching can't make. jev only judges; it never writes text. Requires `jev` on PATH and JEV_API_KEY (or TYPESAFE_API_KEY), or a run under `jev replay`."
+description: "Judge text from the shell with the `jev` CLI: yes/no questions, picking one of several labels, filtering lines, or answering several questions about one input, backed by jev (TypeSafe's System One model). Use when a script or task needs a fuzzy decision about text (is this email urgent, is this a bug report or a feature request, which log lines matter) that string matching can't make. jev only judges; it never writes text. Requires `jev` on PATH and TYPESAFE_API_KEY, or a run under `jev replay`."
 ---
 
 # jev
@@ -11,13 +11,14 @@ lines that shell control flow can use. It returns probabilities over choices you
 Before the first call, check that it can work:
 
 ```bash
-command -v jev && test -n "${JEV_API_KEY:-${TYPESAFE_API_KEY:-}}${JEV_REPLAY:-}"
+command -v jev && test -n "${TYPESAFE_API_KEY:-}${JEV_REPLAY:-}"
 ```
 
 If that fails, say that jev is not installed or has no key, and stop. Do not invent a key or call the API another way.
 
-`jev --help` is the authority for syntax. Set `JEV_MODEL` to a pinned model (for example `jev-1.13.0`); the default
-alias moves.
+`jev --help` is the authority for syntax. Configuration uses the TypeSafe SDKs' variables: `TYPESAFE_API_KEY`,
+`TYPESAFE_BASE_URL` (the API root, default `https://api.typesafe.ai`) and `TYPESAFE_DEFAULT_MODEL` (default
+`jev-latest`). Pin a model such as `jev-1.13.0` when thresholds matter; the alias moves.
 
 ## The one rule: questions are arguments, data is stdin
 
@@ -49,8 +50,9 @@ or `|| …`.
 
 - One yes/no question: `jev feels`.
 - One of several labels: `jev match`.
-- Which lines of a file or stream fit: `jev grep` (one question per line, batched, so it is cheap).
-- Several questions about the same input: `jev ask` (one call for all of them; cheaper than several `feels`).
+- Which lines of a file or stream fit: `jev grep` (a yes/no question per line, as many per call as fit).
+- Several questions about the same input: `jev ask` (one call for all of them: the input is paid for once, and the
+  questions run in parallel, so it is much cheaper and faster than several `feels`).
 - Anything else systemone can express: `jev raw`, starting from another command's `--dry-run`.
 
 ### jev feels
@@ -92,25 +94,34 @@ jev grep -p 'urgent' < todo.txt | sort -rn | head -3     # -p adds a p(yes) colu
 jev grep -v 'routine noise' < app.log                     # the lines that don't fit
 ```
 
-Each line is judged on its own, without the lines around it. With `-c`, lines jev is unsure about are printed by
-neither `grep` nor `grep -v`.
+Each line gets its own yes/no question, which points at that line; with `-c`, lines jev is unsure about are printed
+by neither `grep` nor `grep -v`. Lines are packed into as few calls as jev's context budget allows (64k tokens a
+call). Every other line in a call is noise for a given question, and jev loses accuracy as noise grows; when
+accuracy matters more than cost, cap the lines per call with `--batch 50`.
 
 ### jev ask
 
-`name? question` asks yes/no; `name: a | key=b | …` chooses. Output is `name=answer` lines, quoted for `eval`, so
-the names become shell variables: use lowercase names that don't shadow anything (`PATH`, `IFS`).
+`name? question` asks a yes/no question: write the whole question, exactly as you mean it. `name: question? a |
+key=b | …` chooses between labels; the question is optional, and a label without `key=` is its own key. Output is
+`name=answer` lines, quoted for `eval`, so the names become shell variables: use lowercase names that don't shadow
+anything (`PATH`, `IFS`).
 
 ```bash
-eval "$(jev ask 'urgent? needs a reply urgently' \
-                'kind: invite=an invitation | meeting=a scheduling request | other=anything else' <<<"$email")"
+eval "$(jev ask 'urgent? Does this email need a reply today?' \
+                'kind: What kind of email is this? invite=an invitation | meeting=a scheduling request | other' <<<"$email")"
 echo "$urgent $kind"      # yes meeting
 ```
 
+One question per condition: "Is it angry and asking for a refund?" is two questions. Phrase yes/no questions so
+that yes is the case you act on.
+
 `-p` adds `name_p=` lines; `--json` prints `{"name":{"answer","probability","probabilities"}}` for jq. Under `-c`, an
-unsure yes/no answer is `maybe` and an unsure choice is empty. Give structured input with fields, instead of stdin
-or alongside it (stdin becomes `value`): `-f title="$t"`, `-f diff=@change.patch` (file contents),
-`-f meta:='{"n":1}'` (JSON), `-f meta:=@meta.json`. `ask` reads stdin whenever it isn't a terminal, so with fields
-only, add `</dev/null` if stdin might be an open pipe.
+unsure yes/no answer is `maybe` and an unsure choice is empty.
+
+Give structured input with fields, instead of stdin or alongside it (stdin becomes `value`): `-f title="$t"`,
+`-f diff=@change.patch` (file contents), `-f meta:='{"n":1}'` (JSON), `-f meta:=@meta.json`. With fields, point
+each question at the part it is about, by name in backticks: `'risky? Does \`diff\` change authentication?'`.
+`ask` reads stdin whenever it isn't a terminal, so with fields only, add `</dev/null` if stdin might be an open pipe.
 
 ### jev raw
 
@@ -129,11 +140,12 @@ function). Prefer the shell commands above for scripts.
 ## Confidence and probabilities
 
 The default gate is 50%, where a yes/no answer is never maybe. `-c 80` (or `80%`, `.8`) adds the unsure outcome.
-`-p` prints the probability. Treat probabilities as a ranking signal, not a calibrated guarantee: check a threshold
-on real examples before relying on it.
+`-p` prints the probability. Set a threshold by the cost of being wrong, and check it on real examples. `feels` and
+`match` ask in probably's form (a choice between the description and its negation), while `grep` and `ask` use jev's
+native yes/no question; their numbers are not interchangeable, so don't carry a threshold from one to the other.
 
-Keep each question narrow: one typed decision about one thing. jev is good at a single shallow choice and poor at
-composing several into one question. Ask several small questions and let the script combine the answers.
+Keep each question narrow: one snap judgment about one thing. jev reads literally, and does badly at counting,
+arithmetic, comparing dates and multi-step reasoning; do those in the script and ask jev only the judgment.
 
 ## Chaos
 

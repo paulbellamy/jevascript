@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // jev: jevascript's judgments from the shell. Questions are arguments; the value to judge comes on stdin.
-// feels / match / run go through the library's Provider; grep / ask / raw talk to systemone directly, so one call
-// can carry many questions. record / replay wrap a whole command, so every jev call inside it shares one tape.
+// feels / match / run go through the library's Provider (probably's protocol); grep / ask / raw talk to systemone
+// directly (https://docs.typesafe.ai/api), so one call carries many native questions. record / replay wrap a whole command, so every jev call inside it shares one tape.
 import {parseArgs} from 'node:util';
 import {isatty} from 'node:tty';
 import {appendFileSync,closeSync,mkdtempSync,openSync,readdirSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
@@ -9,17 +9,18 @@ import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {decide,Jevascript,JevascriptError,type Provider} from './jevascript';
 import {record,replay,type Effect,type Recording} from './recording';
-import {answer,choice,fromEnv,jevConfig,judgeRequest,systemOne,type Request,type Response} from './providers';
+import {choiceAnswer,fromEnv,jevConfig,judgeRequest,noulAnswer,systemOne,type Choice,type Noul,type SystemOneRequest,type SystemOneResponse} from './providers';
 import skill from '../skills/jev/SKILL.md' with {type:'text'};
 
 const USAGE=`usage: jev COMMAND [options] ...     (the value to judge comes on stdin)
 
-  jev feels [-c 80] [-q] [-p] QUESTION          prints yes|no|maybe, exits 0|1|3
+  jev feels [-c 80] [-q] [-p] DESCRIPTION       prints yes|no|maybe, exits 0|1|3
   jev match [-c 80] [-p] LABEL|KEY=LABEL ...    prints the chosen key, exits 3 if unsure
-  jev grep  [-c 80] [-q] [-p] [-v] [-n] QUESTION
-                                                prints the lines that fit, judged in batches
-  jev ask   [-c 80] [-p] [--json] [-f K=V|K=@FILE|K:=JSON]... 'NAME? QUESTION' 'NAME: A | KEY=B'
-                                                prints NAME=answer lines, for eval
+  jev grep  [-c 80] [-q] [-p] [-v] [-n] [--batch N] DESCRIPTION
+                                                prints the lines that fit: a yes/no per line
+  jev ask   [-c 80] [-p] [--json] [-f K=V|K=@FILE|K:=JSON]...
+            'NAME? QUESTION' 'NAME: [QUESTION?] A | KEY=B ...'
+                                                asks them all in one call, prints NAME=answer
   jev raw                                       sends a systemone request, prints the response
   jev run PROGRAM.ts [INPUT]                    runs a jevascript program
   jev record FILE -- COMMAND ...                records every jev call COMMAND makes
@@ -31,7 +32,8 @@ const USAGE=`usage: jev COMMAND [options] ...     (the value to judge comes on s
   --chaos      sample instead of taking the argmax (default: JEV_CHAOS); --no-chaos to opt out
   --dry-run    print the request instead of sending it (jev raw sends it)
 
-  exit 2 is an error. env: JEV_API_KEY, JEV_MODEL, JEV_URL, JEV_CHAOS`;
+  exit 2 is an error.
+  env: TYPESAFE_API_KEY, TYPESAFE_BASE_URL, TYPESAFE_DEFAULT_MODEL (as in the TypeSafe SDKs), JEV_CHAOS`;
 
 const YES=0,NO=1,ERROR=2,UNSURE=3;
 class UsageError extends Error {}
@@ -41,9 +43,9 @@ const fmt=(p:number)=>p.toFixed(3);
 // ---- model access: live, or replaying JEV_REPLAY; recording to JEV_RECORD --------------------------------------
 
 /** A direct systemone call (grep, ask, raw), with each question's chaos draw when sampled. */
-type Call = {kind:'systemone'; args:Request; result:Response; draws?:Record<string,number>};
+type Call = {kind:'systemone'; args:SystemOneRequest; result:SystemOneResponse; draws?:Record<string,number>};
 type Tape = (Effect|Call)[];
-type Session = {provider:Provider; ask(request:Request, sample:boolean):Promise<{response:Response; draws?:Record<string,number>}>; save():void};
+type Session = {provider:Provider; ask(request:SystemOneRequest, sample:boolean):Promise<{response:SystemOneResponse; draws?:Record<string,number>}>; save():void};
 
 /** JSON lines, one effect each (what `jev record` writes), or a JSON array (probably's tape). */
 function readTape(file:string):Tape {
@@ -76,7 +78,7 @@ function session(env=process.env):Session {
     provider=fromEnv(env);
     const jev=jevConfig(env),post=jev&&systemOne(jev);
     ask=async(args,sample)=>{
-      if(!post)throw new Error('No judge (JEV_API_KEY) configured. See README.');
+      if(!post)throw new Error('No judge (TYPESAFE_API_KEY) configured. See README.');
       return {response:await post(args),draws:sample?Object.fromEntries(Object.keys(args.questions).map(name=>[name,Math.random()])):undefined};
     };
   }
@@ -122,7 +124,13 @@ function labels(args:string[]):Label[] {
   return ls;
 }
 const yesNo=(question:string)=>[question,`NOT: ${question}`];
-const verdict=(chosen:string|null,question:string)=>chosen===null?'maybe':chosen===question?'yes':'no';
+/** A Noul's verdict under the gate (and chaos draw), by the rule every other judgment uses. */
+const verdictOf=(p:number,c:number,draw?:number)=>decide({yes:p,no:1-p},['yes','no'],c,draw)??'maybe';
+function count(s:string,flag:string):number {
+  const n=Number(s);
+  if(!Number.isInteger(n)||n<1)throw new UsageError(`${flag} takes a whole number, not ${JSON.stringify(s)}.`);
+  return n;
+}
 
 async function stdin():Promise<string> {
   if(isatty(0))throw new UsageError('pipe the value to judge on stdin, e.g. jev feels "urgent" <<<"$message".');
@@ -156,13 +164,20 @@ async function match(args:string[],s:Session):Promise<number> {
   return YES;
 }
 
-/** Lines go into the state as {lines:{L1,L2,…}} with one question per line, up to a batch per call. */
-const LINES_PER_CALL=50,CHARS_PER_CALL=64000,PARALLEL_CALLS=4;
-function batches(lines:string[]):number[][] {
-  const all:number[][]=[];let batch:number[]=[],chars=0;
+// jev-1.13's budget (https://docs.typesafe.ai/models): 64k tokens for the state plus every question, 32k for the
+// state plus the longest question; no limit on the number of questions. There is no tokenizer here, so count a
+// token per 3 bytes and keep some headroom.
+const REQUEST_TOKENS=56000,STATE_TOKENS=28000,PARALLEL_CALLS=4;
+const tokens=(json:unknown)=>Math.ceil(Buffer.byteLength(JSON.stringify(json))/3);
+/** One Noul per line, pointing at the line by path (https://docs.typesafe.ai/primitives#reference-specific-fields). */
+const lineQuestion=(description:string,j:number):Noul=>({type:'noul',instructions:`Does \`lines[${j}]\` match this description: ${JSON.stringify(description)}?`});
+/** Lines go into the state as {lines:[…]}, as many per request as the budget (or `max`) allows. */
+function batches(lines:string[],description:string,max:number):number[][] {
+  const all:number[][]=[];let batch:number[]=[],state=0,questions=0,longest=0;
   lines.forEach((line,i)=>{
-    if(batch.length&&(batch.length===LINES_PER_CALL||chars+line.length>CHARS_PER_CALL)){all.push(batch);batch=[];chars=0;}
-    batch.push(i);chars+=line.length;
+    const l=tokens(line)+1,q=tokens(lineQuestion(description,batch.length))+4;
+    if(batch.length&&(batch.length>=max||state+l+Math.max(longest,q)>STATE_TOKENS||state+l+questions+q>REQUEST_TOKENS)){all.push(batch);batch=[];state=questions=longest=0;}
+    batch.push(i);state+=l;questions+=q;longest=Math.max(longest,q);
   });
   if(batch.length)all.push(batch);
   return all;
@@ -174,34 +189,40 @@ async function pool<T>(tasks:(()=>Promise<T>)[],n:number):Promise<T[]> {
 }
 
 async function grep(args:string[],s:Session):Promise<number> {
-  const {values,positionals}=parse(args,{...judging,...quiet,invert:{type:'boolean',short:'v'},'line-number':{type:'boolean',short:'n'}});
-  const question=one(positionals,'a question'),c=confidence(values.confidence,.5),ls=yesNo(question),chaos=chaotic(values);
+  const {values,positionals}=parse(args,{...judging,...quiet,invert:{type:'boolean',short:'v'},'line-number':{type:'boolean',short:'n'},batch:{type:'string'}});
+  const description=one(positionals,'a description'),c=confidence(values.confidence,.5),chaos=chaotic(values);
+  const max=values.batch===undefined?Infinity:count(values.batch,'--batch');
   const lines=(await stdin()).split('\n');
   if(lines.at(-1)==='')lines.pop();
-  const requests:Request[]=batches(lines).map(batch=>({
-    state:{lines:Object.fromEntries(batch.map(i=>[`L${i+1}`,lines[i]]))},
-    questions:Object.fromEntries(batch.map(i=>[`L${i+1}`,choice(ls,`line L${i+1}`)])),
+  const plan=batches(lines,description,max);
+  const requests:SystemOneRequest[]=plan.map(batch=>({
+    state:{lines:batch.map(i=>lines[i])},
+    questions:Object.fromEntries(batch.map((i,j)=>[`L${i+1}`,lineQuestion(description,j)])),
   }));
   if(values['dry-run']){requests.forEach(r=>out(JSON.stringify(r)));return YES;}
   const results=await pool(requests.map(r=>()=>s.ask(r,chaos)),PARALLEL_CALLS);
   const wanted=values.invert?'no':'yes';let matched=0;
-  results.forEach(({response,draws},b)=>{for(const name of Object.keys(requests[b].questions)) {
-    const probabilities=answer(response,name,ls);
-    if(verdict(decide(probabilities,ls,c,chaos?draws?.[name]:undefined),question)!==wanted)continue;
+  plan.forEach((batch,b)=>{const {response,draws}=results[b];for(const i of batch) {
+    const name=`L${i+1}`,p=noulAnswer(response,name);
+    if(verdictOf(p,c,chaos?draws?.[name]:undefined)!==wanted)continue;
     matched++;
-    if(!values.quiet)out(`${values.probability?`${fmt(probabilities[question])}\t`:''}${values['line-number']?`${name.slice(1)}:`:''}${lines[Number(name.slice(1))-1]}`);
+    if(!values.quiet)out(`${values.probability?`${fmt(p)}\t`:''}${values['line-number']?`${i+1}:`:''}${lines[i]}`);
   }});
   return matched?YES:NO;
 }
 
-/** `name? question` asks yes/no; `name: a | key=b | …` chooses. */
+/** `name? question` asks a Noul; `name: [question?] a | key=b | …` a Choice between the labels, keyed by their keys. */
 const SPEC=/^([A-Za-z_]\w*)\s*([?:])\s*([\s\S]+)$/;
-type Spec = {name:string; yesNo:boolean; labels:Label[]};
+type Spec = {name:string; question:string; labels?:Label[]};
 function spec(arg:string):Spec {
   const m=SPEC.exec(arg);
-  if(!m)throw new UsageError(`ask questions look like 'name? question' or 'name: label | key=label', not ${JSON.stringify(arg)}.`);
-  const text=m[3].trim();
-  return m[2]==='?'?{name:m[1],yesNo:true,labels:[{key:'yes',label:text},{key:'no',label:`NOT: ${text}`}]}:{name:m[1],yesNo:false,labels:labels(text.split('|').map(l=>l.trim()))};
+  if(!m)throw new UsageError(`ask questions look like 'name? question' or 'name: [question?] label | key=label', not ${JSON.stringify(arg)}.`);
+  const [,name,kind,text]=m;
+  if(kind==='?')return {name,question:text.trim()};
+  const bar=text.indexOf('|'),asked=text.slice(0,bar<0?text.length:bar).lastIndexOf('?');
+  const ls=labels(text.slice(asked+1).split('|').map(l=>l.trim()));
+  if(ls.length>255)throw new UsageError('a choice takes at most 255 labels.');
+  return {name,question:text.slice(0,asked+1).trim(),labels:ls};
 }
 /** -f key=value, key=@file (text), key:=json, key:=@file.json */
 function field(arg:string):[string,unknown] {
@@ -217,25 +238,29 @@ async function ask(args:string[],s:Session):Promise<number> {
   const specs=positionals.map(spec);
   if(!specs.length)throw new UsageError('ask needs at least one question.');
   if(new Set(specs.map(q=>q.name)).size<specs.length)throw new UsageError('ask question names must be unique.');
-  const state:Record<string,unknown>={};
-  if(!isatty(0)){const value=trim(await Bun.stdin.text());if(value)state.value=value;}
-  for(const f of values.field??[]){const [k,v]=field(f);state[k]=v;}
-  const keys=Object.keys(state);
-  if(!keys.length)throw new UsageError('ask needs something to judge: pipe it on stdin, or pass -f key=value.');
-  const subject=keys.length===1?keys[0]:'state';
-  const request:Request={state,questions:Object.fromEntries(specs.map(q=>[q.name,choice(q.labels.map(l=>l.label),subject)]))};
+  let value:string|undefined;
+  if(!isatty(0)){const text=trim(await Bun.stdin.text());if(text)value=text;}
+  const fields=Object.fromEntries((values.field??[]).map(field)),structured=Object.keys(fields).length>0;
+  if(value===undefined&&!structured)throw new UsageError('ask needs something to judge: pipe it on stdin, or pass -f key=value.');
+  // Plain text is the state itself; fields make an object (stdin under `value`) that questions point into by path.
+  const state=structured?{...(value===undefined?{}:{value}),...fields}:value;
+  const request:SystemOneRequest={state,questions:Object.fromEntries(specs.map(q=>[q.name,q.labels
+    ?{type:'choice',instructions:q.question||`Which option best describes ${structured?'the state':'this'}?`,criteria:Object.fromEntries(q.labels.map(l=>[l.key,l.key===l.label?null:l.label]))} satisfies Choice
+    :{type:'noul',instructions:q.question} satisfies Noul]))};
   if(values['dry-run']){out(JSON.stringify(request));return YES;}
   const chaos=chaotic(values),{response,draws}=await s.ask(request,chaos);
   let unsure=false;
   const answers=specs.map(q=>{
-    const ls=q.labels.map(l=>l.label),probabilities=answer(response,q.name,ls);
-    const chosen=decide(probabilities,ls,confidence(values.confidence,q.yesNo?.5:0),chaos?draws?.[q.name]:undefined);
+    const draw=chaos?draws?.[q.name]:undefined;
+    if(!q.labels) {
+      const p=noulAnswer(response,q.name),verdict=verdictOf(p,confidence(values.confidence,.5),draw);
+      unsure||=verdict==='maybe';
+      return {name:q.name,answer:verdict,probability:p,probabilities:{yes:p,no:1-p}};
+    }
+    const keys=q.labels.map(l=>l.key),probabilities=choiceAnswer(response,q.name,keys);
+    const chosen=decide(probabilities,keys,confidence(values.confidence,0),draw);
     unsure||=chosen===null;
-    const top=ls.reduce((best,l)=>probabilities[l]>probabilities[best]?l:best);
-    return {name:q.name,
-      answer:chosen===null?(q.yesNo?'maybe':null):q.labels.find(l=>l.label===chosen)!.key,
-      probability:probabilities[q.yesNo?ls[0]:chosen??top],
-      probabilities:Object.fromEntries(q.labels.map(l=>[l.key,probabilities[l.label]]))};
+    return {name:q.name,answer:chosen,probability:probabilities[chosen??keys.reduce((best,k)=>probabilities[k]>probabilities[best]?k:best)],probabilities};
   });
   if(values.json)out(JSON.stringify(Object.fromEntries(answers.map(({name,...a})=>[name,a]))));
   else for(const a of answers){out(`${a.name}=${sh(a.answer??'')}`);if(values.probability)out(`${a.name}_p=${fmt(a.probability)}`);}
@@ -244,7 +269,7 @@ async function ask(args:string[],s:Session):Promise<number> {
 
 async function raw(args:string[],s:Session):Promise<number> {
   parse(args,{});
-  const {response}=await s.ask(JSON.parse(await stdin()) as Request,false);
+  const {response}=await s.ask(JSON.parse(await stdin()) as SystemOneRequest,false);
   out(JSON.stringify(response));
   return YES;
 }
