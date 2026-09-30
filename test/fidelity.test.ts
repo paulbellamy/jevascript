@@ -6,8 +6,9 @@ import {test,expect} from 'bun:test';
 import {Jevascript} from '../src/jevascript';
 import {record,replay,type Recording} from '../src/recording';
 import recordings from './fixtures/recordings.json';
-import {readdirSync,readFileSync} from 'node:fs';
+import {existsSync,readdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
+import {jev,scratch,tape} from './cli';
 
 type ProbablyRun={version:1; source:string; input:string; tape:Recording; output:string[]};
 const dir=join(import.meta.dir,'../examples');
@@ -24,6 +25,19 @@ for(const rec of recordings as ProbablyRun[]) {
     replaying.finish();
     expect(output).toEqual(rec.output);
     expect(recording.recording).toEqual(rec.tape);
+  });
+}
+// The shell ports (the ones without llm) replay the same recordings through `jev replay`, as separate processes.
+for(const rec of recordings as ProbablyRun[]) {
+  const name=bySource.get(rec.source.trim()),script=join(dir,`${name}.sh`);
+  if(!existsSync(script))continue;
+  test(`jev replays probably's ${name} recording through ${name}.sh`,async()=>{
+    const scratchDir=scratch(),file=join(scratchDir,'tape.jsonl'),again=join(scratchDir,'again.jsonl');
+    writeFileSync(file,rec.tape.map(e=>JSON.stringify(e)+'\n').join(''));
+    const run=await jev(['replay',file,'--','bash',script],{stdin:rec.input,env:{JEV_RECORD:again}});
+    expect(run).toMatchObject({err:'',code:0});
+    expect(run.out.split('\n').slice(0,-1)).toEqual(rec.output);
+    expect(tape(again)).toEqual(rec.tape);
   });
 }
 test('all seven examples have a recording',()=>{expect((recordings as ProbablyRun[]).length).toBe(7);expect(bySource.size).toBe(7);});

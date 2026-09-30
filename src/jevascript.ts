@@ -25,6 +25,18 @@ export function distribution(raw:unknown, labels:string[]):Record<string,number>
   return Object.fromEntries(labels.map(label=>[label,(obj[label] as number)/sum]));
 }
 
+/** The decision every judgment makes: argmax (first label wins ties); null when the winner's probability is under
+ *  `confidence`; given a chaos draw, sampled from the distribution once that gate passes. */
+export function decide(probabilities:Record<string,number>, labels:string[], confidence:number, draw?:number):string|null {
+  const best=labels.reduce((best,label)=>probabilities[label]>probabilities[best]?label:best,labels[0]);
+  if(probabilities[best]<confidence)return null;
+  if(draw===undefined)return best;
+  if(!(draw>=0&&draw<1))throw new JevascriptError('Invalid chaos draw.');
+  let remaining=draw;
+  for(const label of labels){remaining-=probabilities[label];if(remaining<0)return label;}
+  return labels[labels.length-1];
+}
+
 type Handlers<R> = {yes?:()=>R|Promise<R>; maybe?:()=>R|Promise<R>; no?:()=>R|Promise<R>};
 
 /** Result of `feels`. Tri-state: the DSL's if / otherwise maybe / else. */
@@ -51,15 +63,7 @@ export class Jevascript {
     const sample=this.chaotic;
     const judgment=await this.provider.judge(value,labels,{sample});
     const probabilities=distribution(judgment.probabilities,labels);
-    let chosen=labels.reduce((best,label)=>probabilities[label]>probabilities[best]?label:best,labels[0]);
-    const uncertain=probabilities[chosen]<confidence;
-    if(sample&&!uncertain) {
-      const draw=judgment.draw??Math.random();
-      if(!(draw>=0&&draw<1))throw new JevascriptError('Invalid chaos draw.');
-      let remaining=draw;chosen=labels[labels.length-1];
-      for(const label of labels){remaining-=probabilities[label];if(remaining<0){chosen=label;break;}}
-    }
-    return {label:uncertain?null:chosen,probabilities,sampled:sample};
+    return {label:decide(probabilities,labels,confidence,sample?judgment.draw??Math.random():undefined),probabilities,sampled:sample};
   }
 
   /** `if value feels "question" with confidence X%`. Default 50% like probably. */

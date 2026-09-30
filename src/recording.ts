@@ -26,12 +26,13 @@ export function record(inner:Provider):Provider&{recording:Recording} {
 
 /** A provider that answers from a recording and makes no model calls. Effects are matched by kind and args,
  *  first unconsumed wins, so order only matters between identical calls (and concurrent programs replay).
- *  Call `finish()` to assert every recorded effect was used. */
-export function replay(recording:Recording):Provider&{finish():void} {
+ *  `claim(i)` lets several replays share one recording (say, across processes): it marks effect i used and says
+ *  whether it was still free. Call `finish()` to assert every recorded effect was used. */
+export function replay(recording:Recording, claim:(i:number)=>boolean=()=>true):Provider&{finish():void} {
   const consumed=new Set<number>();
   const take=<K extends Effect['kind']>(kind:K,args:unknown):Extract<Effect,{kind:K}>=>{
     const key=JSON.stringify(args);
-    const i=recording.findIndex((e,i)=>!consumed.has(i)&&e.kind===kind&&JSON.stringify(e.args)===key);
+    const i=recording.findIndex((e,i)=>!consumed.has(i)&&e.kind===kind&&JSON.stringify(e.args)===key&&claim(i));
     if(i===-1)throw new JevascriptError('Recording does not match this program and input.');
     consumed.add(i);return structuredClone(recording[i]) as Extract<Effect,{kind:K}>;
   };
