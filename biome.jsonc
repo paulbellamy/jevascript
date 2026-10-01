@@ -1,0 +1,10 @@
+{
+	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+	"vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+	"files": { "includes": ["**", "!!**/dist"] },
+	// Lint only. The code is written dense on purpose (src/jevascript.ts is the README's "88 lines of runtime");
+	// Biome's formatter would roughly double it. Turn this on and run `biome format --write .` to adopt it.
+	"formatter": { "enabled": false },
+	"linter": { "enabled": true, "rules": { "preset": "recommended" } },
+	"assist": { "enabled": true, "actions": { "source": { "organizeImports": "on" } } }
+}

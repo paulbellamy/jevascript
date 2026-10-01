@@ -76,7 +76,7 @@ export class Jevascript {
   /** `match value { "label" => {...} }`. Highest probability wins; ties go to the first label; no uncertainty branch. */
   async match<H extends Record<string,()=>unknown>>(value:Value, handlers:H):Promise<Awaited<ReturnType<H[keyof H]>>> {
     const {label}=await this.classify(value,Object.keys(handlers),0);
-    return (await handlers[label!]()) as Awaited<ReturnType<H[keyof H]>>;
+    return (await handlers[label as keyof H]()) as Awaited<ReturnType<H[keyof H]>>;
   }
 
   /** `chaos { ... }`: inside, judgments are sampled from their probabilities instead of taking the argmax

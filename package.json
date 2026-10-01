@@ -15,10 +15,12 @@
   "scripts": {
     "test": "bun test",
     "check": "tsc --noEmit",
+    "lint": "biome check",
     "jev": "bun src/jev.ts",
     "build": "bun build --compile src/jev.ts --outfile dist/jev"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@types/bun": "latest",
     "typescript": "latest"
   }

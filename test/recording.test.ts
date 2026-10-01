@@ -1,6 +1,7 @@
-import {test,expect} from 'bun:test';
+import {expect,test} from 'bun:test';
 import {Jevascript,type Provider} from '../src/jevascript';
-import {record,replay} from '../src/recording';
+import {type Effect,record,replay} from '../src/recording';
+
 const absent:Provider={write:async()=>{throw new Error('Unexpected generation');},judge:async()=>{throw new Error('Unexpected judgment');}};
 const judge=(yes:number):Provider=>({...absent,judge:async(_,labels)=>({probabilities:Object.fromEntries(labels.map((l,i)=>[l,i===0?yes:(1-yes)/(labels.length-1)]))})});
 const condition=async(p:Jevascript,input:string)=>{const out:string[]=[];await p.feels(input,'urgent',{confidence:.8}).when({yes:()=>out.push('yes'),maybe:()=>out.push('maybe'),no:()=>out.push('no')});return out;};
@@ -17,7 +18,7 @@ test('recordings use probably\'s effect shape',async()=>{
   const live=record({...judge(.9),write:async()=>'hi'});const j=new Jevascript(live);
   await j.llm('rewrite','hello');await j.llm('bare');await j.feels('x','q');
   expect(live.recording[2]).toMatchObject({kind:'judge',args:{value:'x',labels:['q','NOT: q']}});
-  expect((live.recording[2] as any).result['NOT: q']).toBeCloseTo(.1);
+  expect((live.recording[2] as Extract<Effect,{kind:'judge'}>).result['NOT: q']).toBeCloseTo(.1);
   expect(live.recording.slice(0,2)).toEqual([
     {kind:'write',args:{prompt:'rewrite',value:'hello'},result:'hi'},
     {kind:'write',args:{prompt:'bare'},result:'hi'},

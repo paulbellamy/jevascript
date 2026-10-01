@@ -1,6 +1,7 @@
 // Ports of probably's runtime tests (those that still apply to a library), plus library-only behaviour.
-import {test,expect} from 'bun:test';
+import {expect,test} from 'bun:test';
 import {distribution,Jevascript,type Provider} from '../src/jevascript';
+
 const absent:Provider={write:async()=>{throw new Error('Unexpected generation');},judge:async()=>{throw new Error('Unexpected judgment');}};
 const judge=(yes:number):Provider=>({...absent,judge:async(_,labels)=>({probabilities:Object.fromEntries(labels.map((l,i)=>[l,i===0?yes:(1-yes)/(labels.length-1)]))})});
 const fixed=(draw:number)=>(p:Provider):Provider=>({...p,judge:async(...a)=>({...await p.judge(...a),draw})});

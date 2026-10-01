@@ -1,5 +1,5 @@
 // The jev CLI against a fake systemone, run as a subprocess. No model calls.
-import {test,expect,afterAll} from 'bun:test';
+import {afterAll,expect,test} from 'bun:test';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {judgeRequest} from '../src/providers';
@@ -9,8 +9,8 @@ import {jev,scratch,sh,tape} from './cli';
 // question judges (the line it points at, or the state). Noul: .95 when the text says "urgent", .6 when it says "meh",
 // else .05; probably's "q" vs "NOT: q" choice the same. Other choices: .7 on the first option whose description (or
 // key) ends in a word the text contains, the rest shared; uniform when none does.
-type Question = {type:string; instructions?:unknown; criteria?:any};
-type Body = {model:string; state:any; questions:Record<string,Question>};
+type Question = {type:string; instructions?:unknown; criteria?:Record<string,unknown>};
+type Body = {model:string; state:string|{lines?:string[]; value?:string; [field:string]:unknown}; questions:Record<string,Question>};
 const seen:Body[]=[],paths:string[]=[];
 let failures:number[]=[];  // statuses to send before answering, to exercise retries
 function invalid(body:Body):string|undefined {
@@ -35,12 +35,13 @@ const server=Bun.serve({port:0,async fetch(request) {
   const yes=(text:string)=>text.includes('urgent')?.95:text.includes('meh')?.6:.05;
   return Response.json({model:body.model,usage:{input_tokens:1,output_tokens:1},answers:Object.fromEntries(Object.entries(body.questions).map(([name,q])=>{
     const line=/`lines\[(\d+)\]`/.exec(String(q.instructions));
-    const text=String(line?body.state.lines[Number(line[1])]:typeof body.state==='string'?body.state:body.state.value??JSON.stringify(body.state)).toLowerCase();
+    const state=body.state;
+    const text=String(typeof state==='string'?state:line?state.lines?.[Number(line[1])]:state.value??JSON.stringify(state)).toLowerCase();
     if(q.type==='noul')return [name,{type:'noul',noul:yes(text)}];
-    const keys=Object.keys(q.criteria),labels=keys.map(k=>String(q.criteria[k]??k));
+    const criteria=q.criteria??{},keys=Object.keys(criteria),labels=keys.map(k=>String(criteria[k]??k));
     let ps:number[];
     if(labels[1]?.startsWith('NOT: '))ps=[yes(text),1-yes(text)];
-    else {const w=labels.findIndex(l=>text.includes(l.split(' ').at(-1)!.toLowerCase()));ps=labels.map((_,i)=>w===-1?1/labels.length:i===w?.7:.3/(labels.length-1));}
+    else {const w=labels.findIndex(l=>text.includes((l.split(' ').at(-1)??'').toLowerCase()));ps=labels.map((_,i)=>w===-1?1/labels.length:i===w?.7:.3/(labels.length-1));}
     return [name,{type:'choice',choice:keys[ps.indexOf(Math.max(...ps))],probabilities:Object.fromEntries(keys.map((k,i)=>[k,ps[i]])),confidence:.5}];
   }))});
 }});
@@ -51,7 +52,7 @@ const run=(args:string[],stdin='',env:Record<string,string>={})=>jev(args,{stdin
 test('feels prints the verdict and exits with it; maybe needs a confidence gate',async()=>{
   seen.length=0;
   expect(await run(['feels','urgent'],'this is URGENT\n\n')).toMatchObject({out:'yes\n',code:0});
-  expect(seen[0]).toEqual({model:'jev-test',...judgeRequest('this is URGENT',['urgent','NOT: urgent'])} as any);
+  expect<unknown>(seen[0]).toEqual({model:'jev-test',...judgeRequest('this is URGENT',['urgent','NOT: urgent'])});
   expect(await run(['feels','urgent'],'lunch?')).toMatchObject({out:'no\n',code:1});
   expect(await run(['feels','urgent'],'meh')).toMatchObject({out:'yes\n',code:0});
   for(const c of ['80','80%','.8'])expect(await run(['feels','-c',c,'urgent'],'meh')).toMatchObject({out:'maybe\n',code:3});
@@ -119,7 +120,7 @@ test('grep batches by the documented token budget, not a question count; --batch
   expect((await run(['grep','urgent'],long.join('\n'))).code).toBe(1);
   expect(seen.length).toBeGreaterThanOrEqual(3);
   for(const body of seen)expect(Buffer.byteLength(JSON.stringify(body.state))/3).toBeLessThan(28000);
-  expect(seen.flatMap(b=>b.state.lines).sort()).toEqual([...long].sort());
+  expect(seen.flatMap(b=>typeof b.state==='string'?[]:b.state.lines??[]).sort()).toEqual([...long].sort());
 });
 
 test('ask sends every question in one call: Nouls and Choices keyed by your keys',async()=>{
@@ -207,7 +208,7 @@ test('replay shares one tape across concurrent processes, one effect each',async
 
 test('replay takes the recorded chaos draw',async()=>{
   const file=join(scratch(),'t.jsonl');
-  writeFileSync(file,JSON.stringify({kind:'judge',args:{value:'x',labels:['urgent','NOT: urgent']},result:{urgent:.95,'NOT: urgent':.05},draw:.97})+'\n');
+  writeFileSync(file,`${JSON.stringify({kind:'judge',args:{value:'x',labels:['urgent','NOT: urgent']},result:{urgent:.95,'NOT: urgent':.05},draw:.97})}\n`);
   expect(await jev(['replay',file,'--','jev','feels','--chaos','urgent'],{stdin:'x'})).toMatchObject({out:'no\n',code:1});
 });
 
@@ -221,7 +222,7 @@ test('--skill prints an agent skill that covers every command',async()=>{
   const skill=(await jev(['--skill'])).out;
   expect(skill).toBe(readFileSync(join(import.meta.dir,'../skills/jev/SKILL.md'),'utf8'));
   expect(skill).toStartWith('---\nname: jev\ndescription: ');
-  const commands=[...(await jev(['--help'])).out.matchAll(/^  jev (\w+)/gm)].map(m=>m[1]);
+  const commands=[...(await jev(['--help'])).out.matchAll(/^ {2}jev (\w+)/gm)].map(m=>m[1]);
   expect(commands).toEqual(['feels','match','grep','ask','raw','run','record','replay']);
   for(const command of commands)expect(skill).toContain(`jev ${command}`);
 });

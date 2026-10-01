@@ -2,13 +2,13 @@
 // interpreter) through the TS ports. Output must match byte-for-byte, every recorded effect must be
 // consumed, and re-recording the replay must reproduce the recording exactly (so the ports issue the same
 // effects with the same args). Zero model calls.
-import {test,expect} from 'bun:test';
-import {Jevascript} from '../src/jevascript';
-import {record,replay,type Recording} from '../src/recording';
-import recordings from './fixtures/recordings.json';
+import {expect,test} from 'bun:test';
 import {existsSync,readdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
+import {Jevascript} from '../src/jevascript';
+import {type Recording,record,replay} from '../src/recording';
 import {jev,scratch,tape} from './cli';
+import recordings from './fixtures/recordings.json';
 
 type ProbablyRun={version:1; source:string; input:string; tape:Recording; output:string[]};
 const dir=join(import.meta.dir,'../examples');
@@ -33,7 +33,7 @@ for(const rec of recordings as ProbablyRun[]) {
   if(!existsSync(script))continue;
   test(`jev replays probably's ${name} recording through ${name}.sh`,async()=>{
     const scratchDir=scratch(),file=join(scratchDir,'tape.jsonl'),again=join(scratchDir,'again.jsonl');
-    writeFileSync(file,rec.tape.map(e=>JSON.stringify(e)+'\n').join(''));
+    writeFileSync(file,rec.tape.map(e=>`${JSON.stringify(e)}\n`).join(''));
     const run=await jev(['replay',file,'--','bash',script],{stdin:rec.input,env:{JEV_RECORD:again}});
     expect(run).toMatchObject({err:'',code:0});
     expect(run.out.split('\n').slice(0,-1)).toEqual(rec.output);

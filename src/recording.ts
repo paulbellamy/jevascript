@@ -1,6 +1,6 @@
 // Opt-in record / replay of model results, as provider wrappers. The runtime knows nothing about it.
 // Effect shape is probably's, so probably's own recordings load unchanged.
-import {type Provider,type Value,type Judgment,JevascriptError} from './jevascript';
+import {JevascriptError,type Judgment,type Provider,type Value} from './jevascript';
 
 export type Effect =
   | {kind:'judge'; args:{value:Value; labels:string[]}; result:Record<string,number>; draw?:number}

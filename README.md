@@ -97,6 +97,7 @@ back as exit codes and plain lines.
 
 ```sh
 bun install -g github:paulbellamy/jevascript    # or bun run build: dist/jev, one standalone binary
+curl -fLo jev https://github.com/paulbellamy/jevascript/releases/latest/download/jev-linux-x64 && chmod +x jev
 export TYPESAFE_API_KEY=… TYPESAFE_DEFAULT_MODEL=jev-1.13.0    # and TYPESAFE_BASE_URL for another server
 ```
 
@@ -150,11 +151,16 @@ matches the version.
 ```sh
 bun install && bun test        # 42 tests; 10 replay probably's recordings (7 ts ports, 3 shell ports); zero model calls
 bun run check                  # tsc
+bun run lint                   # biome: lint and import order (the formatter is off, see biome.jsonc)
 bun install -g .               # jev on PATH
 TYPESAFE_API_KEY=… TEXT_API_KEY=… TEXT_BASE_URL=https://gateway.ai.cloudflare.com/v1/<acct>/<gw>/workers-ai/v1 \
   jev record inbox.run.jsonl -- jev run examples/inbox.ts "$(cat email.txt)"
 jev replay inbox.run.jsonl -- jev run examples/inbox.ts "$(cat email.txt)"
 ```
+
+ci runs biome, tsc and the tests on every push and pull request. a merge to the default branch also builds jev for
+linux, macos (x64, arm64) and windows (x64) and publishes them, with a `SHA256SUMS`, as a release tagged
+`v<version>-<sha>`; `releases/latest/download/jev-<os>-<arch>` is always the newest.
 
 ## layout
 

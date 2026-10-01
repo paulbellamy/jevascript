@@ -1,16 +1,18 @@
 #!/usr/bin/env bun
 // jev: jevascript's judgments from the shell. Questions are arguments; the value to judge comes on stdin.
 // feels / match / run go through the library's Provider (probably's protocol); grep / ask / raw talk to systemone
-// directly (https://docs.typesafe.ai/api), so one call carries many native questions. record / replay wrap a whole command, so every jev call inside it shares one tape.
-import {parseArgs} from 'node:util';
-import {isatty} from 'node:tty';
+// directly (https://docs.typesafe.ai/api), so one call carries many native questions. record / replay wrap a whole
+// command, so every jev call inside it shares one tape.
+
 import {appendFileSync,closeSync,mkdtempSync,openSync,readdirSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
-import {decide,Jevascript,JevascriptError,type Provider} from './jevascript';
-import {record,replay,type Effect,type Recording} from './recording';
-import {choiceAnswer,fromEnv,jevConfig,judgeRequest,noulAnswer,systemOne,type Choice,type Noul,type SystemOneRequest,type SystemOneResponse} from './providers';
+import {isatty} from 'node:tty';
+import {parseArgs} from 'node:util';
 import skill from '../skills/jev/SKILL.md' with {type:'text'};
+import {decide,Jevascript,JevascriptError,type Provider} from './jevascript';
+import {type Choice,choiceAnswer,fromEnv,jevConfig,judgeRequest,type Noul,noulAnswer,type SystemOneRequest,type SystemOneResponse,systemOne} from './providers';
+import {type Effect,type Recording,record,replay} from './recording';
 
 const USAGE=`usage: jev COMMAND [options] ...     (the value to judge comes on stdin)
 
@@ -87,7 +89,7 @@ function session(env=process.env):Session {
   return {
     provider:live,
     async ask(args,sample){const r=await inner(args,sample);tape.push({kind:'systemone',args,result:r.response,...(r.draws?{draws:r.draws}:{})});return r;},
-    save(){if(tape.length)appendFileSync(file,tape.map(e=>JSON.stringify(e)+'\n').join(''));},
+    save(){if(tape.length)appendFileSync(file,tape.map(e=>`${JSON.stringify(e)}\n`).join(''));},
   };
 }
 
@@ -159,7 +161,7 @@ async function match(args:string[],s:Session):Promise<number> {
   const p=new Jevascript(s.provider);
   const r=await within(p,chaotic(values),()=>p.classify(value,ls.map(l=>l.label),c));
   if(r.label===null)return UNSURE;
-  const key=ls.find(l=>l.label===r.label)!.key;
+  const key=ls.find(l=>l.label===r.label)?.key??r.label;
   out(values.probability?`${fmt(r.probabilities[r.label])}\t${key}`:key);
   return YES;
 }
@@ -199,7 +201,7 @@ async function grep(args:string[],s:Session):Promise<number> {
     state:{lines:batch.map(i=>lines[i])},
     questions:Object.fromEntries(batch.map((i,j)=>[`L${i+1}`,lineQuestion(description,j)])),
   }));
-  if(values['dry-run']){requests.forEach(r=>out(JSON.stringify(r)));return YES;}
+  if(values['dry-run']){for(const r of requests)out(JSON.stringify(r));return YES;}
   const results=await pool(requests.map(r=>()=>s.ask(r,chaos)),PARALLEL_CALLS);
   const wanted=values.invert?'no':'yes';let matched=0;
   plan.forEach((batch,b)=>{const {response,draws}=results[b];for(const i of batch) {
@@ -231,7 +233,7 @@ function field(arg:string):[string,unknown] {
   const raw=m[3]?trim(readFileSync(m[4],'utf8')):m[4];
   return [m[1],m[2]===':='?JSON.parse(raw):raw];
 }
-const sh=(v:string)=>/^[\w.\/:+-]+$/.test(v)?v:`'${v.replaceAll("'",`'\\''`)}'`;
+const sh=(v:string)=>/^[\w./:+-]+$/.test(v)?v:`'${v.replaceAll("'",`'\\''`)}'`;
 
 async function ask(args:string[],s:Session):Promise<number> {
   const {values,positionals}=parse(args,{...judging,json:{type:'boolean'},field:{type:'string',short:'f',multiple:true}});
@@ -312,7 +314,7 @@ try {
   else {console.error(USAGE);process.exitCode=ERROR;}
 } catch(error) {
   const usage=error instanceof UsageError||String((error as {code?:unknown})?.code).startsWith('ERR_PARSE_ARGS');
-  console.error(`jev: ${error instanceof Error?error.message:error}`+(usage?'\nsee jev --help':''));
+  console.error(`jev: ${error instanceof Error?error.message:error}${usage?'\nsee jev --help':''}`);
   process.exitCode=ERROR;
 } finally {
   s?.save();
