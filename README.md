@@ -144,7 +144,7 @@ jev replay run.jsonl -- ./triage.sh < email.txt    # no keys, no model calls; fa
 replaying processes claim effects by creating a file per effect, so concurrent calls (`&`) each get their own.
 
 `jev --skill` prints `skills/jev/SKILL.md`, an agent skill for driving the cli. the binary embeds it, so it always
-matches the version.
+matches the version, and `jev --help` ends by pointing agents at it, the way herdr's does.
 
 ## run
 
