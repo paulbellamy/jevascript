@@ -354,6 +354,33 @@ test('run runs a jevascript program, like the old cli', async () => {
   expect((await jev(['run', join(examples, 'hello.ts')])).out.split('\n')).toHaveLength(5);
 });
 
+test('help lists --skill as an option and ends by pointing agents at it, like herdr', async () => {
+  for (const args of [
+    ['--help'],
+    ['-h'],
+    ['help'],
+    ['feels', '--help'],
+    ['grep', '-c', '80', '-h'],
+    ['replay', '--help'],
+  ]) {
+    const help = await jev(args);
+    expect(help).toMatchObject({ code: 0, err: '' });
+    expect(help.out).toMatch(/^ {2}--skill +print the agent skill file and exit$/m);
+    expect(help.out).toContain('Are you an AI? Use these resources ONLY IF your task specifically asks you to:');
+    expect(help.out.trimEnd().split('\n').slice(-4)[1]).toContain('Otherwise run: jev --skill');
+  }
+  const bare = await jev([]);
+  expect(bare.code).toBe(2);
+  expect(bare.err).toContain('Otherwise run: jev --skill');
+  // A wrapped command's --help is its own.
+  const file = join(scratch(), 'empty.jsonl');
+  writeFileSync(file, '');
+  expect(await jev(['replay', file, '--', 'bash', '-c', 'echo "$1"', '_', '--help'])).toMatchObject({
+    out: '--help\n',
+    code: 0,
+  });
+});
+
 test('--skill prints an agent skill that covers every command', async () => {
   const skill = (await jev(['--skill'])).out;
   expect(skill).toBe(readFileSync(join(import.meta.dir, '../skills/jev/SKILL.md'), 'utf8'));

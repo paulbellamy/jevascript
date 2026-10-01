@@ -34,8 +34,18 @@ import {
 } from './providers';
 import { type Effect, type Recording, record, replay } from './recording';
 
-const USAGE = `usage: jev COMMAND [options] ...     (the value to judge comes on stdin)
+// Like herdr's: help ends by pointing agents at the skill, and only when their task calls for it.
+const AGENT_HELP_FOOTER = `Are you an AI? Use these resources ONLY IF your task specifically asks you to:
+  Judge text with jev from a shell or a script:
+    SKIP if a jev skill is already in your context. Otherwise run: jev --skill
+  Build on the TypeSafe API that jev calls:
+    https://docs.typesafe.ai/llms.txt`;
 
+const USAGE = `jev: judge text from the shell with jev, TypeSafe's System One model
+
+Usage: jev COMMAND [options] ...     (the value to judge comes on stdin)
+
+Commands:
   jev feels [-c 80] [-q] [-p] DESCRIPTION       prints yes|no|maybe, exits 0|1|3
   jev match [-c 80] [-p] LABEL|KEY=LABEL ...    prints the chosen key, exits 3 if unsure
   jev grep  [-c 80] [-q] [-p] [-v] [-n] [--batch N] DESCRIPTION
@@ -47,15 +57,20 @@ const USAGE = `usage: jev COMMAND [options] ...     (the value to judge comes on
   jev run PROGRAM.ts [INPUT]                    runs a jevascript program
   jev record FILE -- COMMAND ...                records every jev call COMMAND makes
   jev replay FILE -- COMMAND ...                replays them: no keys, no model calls
-  jev --skill                                   prints the agent skill for using jev
 
-  -c N         confidence gate: 80, 80% or .8
-  -p           prefix a probability column
-  --chaos      sample instead of taking the argmax (default: JEV_CHAOS); --no-chaos to opt out
-  --dry-run    print the request instead of sending it (jev raw sends it)
+Options:
+  -c N                confidence gate: 80, 80% or .8
+  -p                  prefix a probability column
+  --chaos             sample instead of taking the argmax (default: JEV_CHAOS); --no-chaos to opt out
+  --dry-run           print the request instead of sending it (jev raw sends it)
+  --skill             print the agent skill file and exit
+  --help, -h          show this help
 
-  exit 2 is an error.
-  env: TYPESAFE_API_KEY, TYPESAFE_BASE_URL, TYPESAFE_DEFAULT_MODEL (as in the TypeSafe SDKs), JEV_CHAOS`;
+Exit:   2 is an error; 0, 1 and 3 are answers, as above
+Env:    TYPESAFE_API_KEY, TYPESAFE_BASE_URL, TYPESAFE_DEFAULT_MODEL (as in the TypeSafe SDKs), JEV_CHAOS
+Home:   https://github.com/paulbellamy/jevascript
+
+${AGENT_HELP_FOOTER}`;
 
 const YES = 0,
   NO = 1,
@@ -510,16 +525,24 @@ async function wrap(mode: 'record' | 'replay', args: string[]): Promise<number> 
 
 const commands: Record<string, (args: string[], s: Session) => Promise<number>> = { feels, match, grep, ask, raw, run };
 const [command, ...args] = process.argv.slice(2);
+const wrapping = command === 'record' || command === 'replay';
+// `jev COMMAND --help` shows help too, but never for what record / replay run (everything after FILE) or after `--`.
+const own = wrapping ? args.slice(0, 1) : args.slice(0, args.indexOf('--') + 1 || undefined);
+const help =
+  command === 'help' ||
+  command === '-h' ||
+  command === '--help' ||
+  ((wrapping || Object.hasOwn(commands, command ?? '')) && own.some((a) => a === '--help' || a === '-h'));
 let s: Session | undefined;
 try {
-  if (command === 'record' || command === 'replay') process.exitCode = await wrap(command, args);
-  else if (command === 'help' || command === '-h' || command === '--help') {
+  if (help) {
     out(USAGE);
     process.exitCode = YES;
   } else if (command === '--skill') {
     process.stdout.write(skill);
     process.exitCode = YES;
-  } else if (command && Object.hasOwn(commands, command)) {
+  } else if (wrapping) process.exitCode = await wrap(command, args);
+  else if (command && Object.hasOwn(commands, command)) {
     s = session();
     process.exitCode = await commands[command](args, s);
   } else if (command) throw new UsageError(`unknown command ${JSON.stringify(command)}.`);
