@@ -1,7 +1,12 @@
 {
   "compilerOptions": {
-    "target": "ESNext", "module": "ESNext", "moduleResolution": "bundler",
-    "strict": true, "noEmit": true, "skipLibCheck": true, "types": ["bun-types"]
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["bun-types"]
   },
   "include": ["src", "examples", "test"]
 }

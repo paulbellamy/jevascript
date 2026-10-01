@@ -1,7 +1,7 @@
 # jevascript
 
 probably-lang's primitives (`feels`, `match`, `chaos`, `llm`) as a plain TypeScript library, and `jev`, a cli
-that brings them to the shell. jev + javascript. 88 lines of runtime, no deps.
+that brings them to the shell. jev + javascript. 142 lines of runtime, no deps.
 
 how close can a library get to [probably](https://github.com/southpolesteve/probably) ([playground](https://probably-lang.southpolesteve.workers.dev/)) without a
 parser? all the way, on the semantics: probably's own shipped recordings (real jev + llama results for
@@ -151,7 +151,7 @@ matches the version.
 ```sh
 bun install && bun test        # 42 tests; 10 replay probably's recordings (7 ts ports, 3 shell ports); zero model calls
 bun run check                  # tsc
-bun run lint                   # biome: lint and import order (the formatter is off, see biome.jsonc)
+bun run lint                   # biome: format, lint, import order (bunx biome check --write . fixes)
 bun install -g .               # jev on PATH
 TYPESAFE_API_KEY=… TEXT_API_KEY=… TEXT_BASE_URL=https://gateway.ai.cloudflare.com/v1/<acct>/<gw>/workers-ai/v1 \
   jev record inbox.run.jsonl -- jev run examples/inbox.ts "$(cat email.txt)"
