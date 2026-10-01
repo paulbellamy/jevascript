@@ -1,3 +1,4 @@
 node_modules
 .env
-*.run.json
+*.run.json*
+dist

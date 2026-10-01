@@ -3,18 +3,24 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "probably-lang's primitives (feels, match, chaos, llm) as a plain TypeScript library. jev + javascript.",
+  "description": "probably-lang's primitives (feels, match, chaos, llm) as a plain TypeScript library, and jev, a CLI that brings them to the shell. jev + javascript.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/paulbellamy/jevascript.git"
   },
+  "bin": {
+    "jev": "src/jev.ts"
+  },
   "scripts": {
     "test": "bun test",
     "check": "tsc --noEmit",
-    "run": "bun src/cli.ts"
+    "lint": "biome check",
+    "jev": "bun src/jev.ts",
+    "build": "bun build --compile src/jev.ts --outfile dist/jev"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@types/bun": "latest",
     "typescript": "latest"
   }
